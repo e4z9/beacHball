@@ -1,0 +1,22 @@
+name:                beacHball
+version:             0.1.0.0
+-- synopsis:
+description:         Please see README.md
+homepage:            https://github.com/e4z9/beacHball#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Eike Ziller
+maintainer:          staff@eikeziller.de
+copyright:           2016 Eike Ziller
+category:            Game
+build-type:          Simple
+cabal-version:       >=1.10
+
+executable beacHball
+  hs-source-dirs:      src
+  main-is:             Main.hs
+  default-language:    Haskell2010
+  build-depends:       base >= 4.7 && < 5
+                     , containers
+                     , sdl2
+                     , netwire
