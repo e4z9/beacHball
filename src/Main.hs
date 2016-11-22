@@ -7,7 +7,6 @@ import qualified Control.Monad as M
 import Control.Monad.IO.Class
 import Control.Wire
 import Data.Foldable (foldl')
-import Data.Int (Int32)
 import Data.Maybe
 import qualified Data.Set as Set
 import Foreign.C.Types
@@ -54,39 +53,49 @@ isScancodePressed code = any ((==) code . SDL.keysymScancode)
 scancodePressed :: (Monoid e, Monad m) => SDL.Scancode -> Wire s e m Keys Keys
 scancodePressed k = when (isScancodePressed k)
 
-dx :: RealFrac n => n
-dx = 200
+playerSpeed :: CFloat
+playerSpeed = 200
 
-speed :: (Monoid e, Monad m, RealFrac n) => Wire s e m Keys n
-speed  =  pure 0 . scancodePressed SDL.ScancodeA . scancodePressed SDL.ScancodeD
-      <|> pure (-dx) . scancodePressed SDL.ScancodeA
-      <|> pure dx . scancodePressed SDL.ScancodeD
+speedControl :: (Monoid e, Monad m) => SDL.Scancode -> SDL.Scancode -> Wire s e m Keys CFloat
+speedControl left right = pure 0 . scancodePressed left . scancodePressed right
+      <|> pure (-playerSpeed) . scancodePressed left
+      <|> pure playerSpeed . scancodePressed right
       <|> pure 0
 
-pos :: (HasTime t s, Monoid e, Monad m, RealFrac n) => Wire s e m Keys n
-pos = integral 0 . speed
+pos1 :: (HasTime t s, Monoid e, Monad m) => Wire s e m Keys CFloat
+pos1 = integral 50 . speedControl SDL.ScancodeA SDL.ScancodeD
+
+pos2 :: (HasTime t s, Monoid e, Monad m) => Wire s e m Keys CFloat
+pos2 = integral 350 . speedControl SDL.ScancodeLeft SDL.ScancodeRight
 
 untilQuitOrClose :: (Monoid e, Monad m) => Wire s e m [SDL.Event] ()
 untilQuitOrClose = until <<< pure () &&& closeOrQuitRequestedEv
 
-logic :: (HasTime t s, Monad m, RealFrac n) => Wire s () m [SDL.Event] n
+logic :: (HasTime t s, Monad m) => Wire s () m [SDL.Event] RenderInfo
 logic = proc events -> do
   untilQuitOrClose -< events
   keys <- handleKeyEvents -< events
-  pos -< keys
+  x1 <- pos1 -< keys
+  x2 <- pos2 -< keys
+  returnA -< (x1, x2)
 
 anyRenderingDriver = -1
 
-render :: (RealFrac n, MonadIO m) => n -> SDL.Renderer-> m ()
-render x r = do
-  let xp = fromInteger $ toInteger $ round x
+toCInt n = CInt (fromInteger $ toInteger $ round n)
+
+type RenderInfo = (CFloat, CFloat)
+
+render :: MonadIO m => RenderInfo -> SDL.Renderer-> m ()
+render (x1, x2) r = do
+  let (x1p, x2p) = (toCInt x1, toCInt x2)
   SDL.rendererDrawColor r SDL.$= SDL.V4 0 0 0 255
   SDL.clear r
   SDL.rendererDrawColor r SDL.$= SDL.V4 255 255 255 255
-  SDL.fillRect r $ Just $ SDL.Rectangle (SDL.P (SDL.V2 (CInt xp) 200)) (SDL.V2 40 40)
+  SDL.fillRect r $ Just $ SDL.Rectangle (SDL.P (SDL.V2 x1p 200)) (SDL.V2 40 40)
+  SDL.fillRect r $ Just $ SDL.Rectangle (SDL.P (SDL.V2 x2p 200)) (SDL.V2 40 40)
   SDL.present r
 
-renderLoop :: (HasTime t s, Monoid e, MonadIO m, RealFrac n) => SDL.Renderer -> Session m s -> Wire s e m [SDL.Event] n -> m ()
+renderLoop :: (HasTime t s, Monoid e, MonadIO m) => SDL.Renderer -> Session m s -> Wire s e m [SDL.Event] RenderInfo -> m ()
 renderLoop renderer session wire = do
   events <- SDL.pollEvents
   (step, session') <- stepSession session
