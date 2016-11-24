@@ -108,7 +108,7 @@ renderLoop renderer session wire = do
 main :: IO ()
 main = do
   SDL.initialize [SDL.InitVideo]
-  window <- SDL.createWindow "Netwire Test" SDL.defaultWindow
+  window <- SDL.createWindow "BeacHball" SDL.defaultWindow
   let vsyncRenderer = SDL.defaultRenderer { SDL.rendererType = SDL.AcceleratedVSyncRenderer }
   renderer <- SDL.createRenderer window anyRenderingDriver vsyncRenderer
   renderLoop renderer clockSession_ logic
