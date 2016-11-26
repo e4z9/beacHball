@@ -16,19 +16,19 @@ import FRP.Netwire
 import qualified SDL
 import Prelude hiding ((.))
 
-playerSpeed :: CFloat
+playerSpeed :: Float
 playerSpeed = 200
 
-speedControl :: (Monoid e, Monad m) => SDL.Scancode -> SDL.Scancode -> Wire s e m Keys CFloat
+speedControl :: (Monoid e, Monad m) => SDL.Scancode -> SDL.Scancode -> Wire s e m Keys Float
 speedControl left right = pure 0 . scancodePressed left . scancodePressed right
       <|> pure (-playerSpeed) . scancodePressed left
       <|> pure playerSpeed . scancodePressed right
       <|> pure 0
 
-pos1 :: (HasTime t s, Monoid e, Monad m) => Wire s e m Keys CFloat
+pos1 :: (HasTime t s, Monoid e, Monad m) => Wire s e m Keys Float
 pos1 = integral 50 . speedControl SDL.ScancodeA SDL.ScancodeD
 
-pos2 :: (HasTime t s, Monoid e, Monad m) => Wire s e m Keys CFloat
+pos2 :: (HasTime t s, Monoid e, Monad m) => Wire s e m Keys Float
 pos2 = integral 350 . speedControl SDL.ScancodeLeft SDL.ScancodeRight
 
 loadTexture :: MonadIO m => SDL.Renderer -> FilePath -> m SDL.Texture
@@ -40,8 +40,8 @@ loadTexture renderer path = do
 
 data Sprite = Sprite {
   _texture :: SDL.Texture,
-  _x :: CFloat,
-  _y :: CFloat
+  _x :: Float,
+  _y :: Float
 }
 makeLenses ''Sprite
 
