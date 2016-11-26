@@ -63,5 +63,6 @@ main = do
   let vsyncRenderer = SDL.defaultRenderer { SDL.rendererType = SDL.AcceleratedVSyncRenderer }
   renderer <- SDL.createRenderer window anyRenderingDriver vsyncRenderer
   scene <- startScene renderer
+  render renderer scene
   renderLoop renderer scene clockSession_ logic
   SDL.quit
