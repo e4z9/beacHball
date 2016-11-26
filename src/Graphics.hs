@@ -15,11 +15,8 @@ data Sprite = Sprite {
 }
 makeLenses ''Sprite
 
-data Scene = Scene {
-  _player1 :: Sprite,
-  _player2 :: Sprite
-}
-makeLenses ''Scene
+class Scene s where
+  renderScene :: MonadIO m => s -> (Sprite -> m ()) -> m ()
 
 loadTexture :: MonadIO m => SDL.Renderer -> FilePath -> m SDL.Texture
 loadTexture renderer path = do
@@ -40,15 +37,14 @@ renderSprite r sprite = do
   let hi = SDL.textureHeight textureInfo
   SDL.copy r tex Nothing $ Just $ SDL.Rectangle (SDL.P (SDL.V2 xi yi)) (SDL.V2 wi hi)
 
-render :: MonadIO m => SDL.Renderer -> Scene -> m ()
+render :: (MonadIO m, Scene s) => SDL.Renderer -> s -> m ()
 render r scene = do
   SDL.rendererDrawColor r SDL.$= SDL.V4 255 255 255 255
   SDL.clear r
-  renderSprite r $ view player1 scene
-  renderSprite r $ view player2 scene
+  renderScene scene $ renderSprite r
   SDL.present r
 
-renderLoop :: (HasTime t s, Monoid e, MonadIO m) => SDL.Renderer -> Scene -> Session m s -> Wire s e m (Scene, [SDL.Event]) Scene -> m ()
+renderLoop :: (HasTime t s, Monoid e, MonadIO m, Scene sc) => SDL.Renderer -> sc -> Session m s -> Wire s e m (sc, [SDL.Event]) sc -> m ()
 renderLoop renderer scene session wire = do
   events <- SDL.pollEvents
   (step, session') <- stepSession session
