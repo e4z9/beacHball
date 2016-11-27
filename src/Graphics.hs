@@ -39,12 +39,10 @@ loadTexture renderer path = do
   SDL.textureBlendMode tex2 SDL.$= SDL.BlendAlphaBlend
   return tex2
 
-toRoundedCInt n = CInt (fromIntegral $ toInteger $ round n)
-
 renderSprite :: MonadIO m => SDL.Renderer -> Sprite -> m ()
 renderSprite r sprite = do
-  let xi = toRoundedCInt $ view x sprite
-  let yi = toRoundedCInt $ view y sprite
+  let xi = round $ view x sprite
+  let yi = round $ view y sprite
   let tex = view texture sprite
   textureInfo <- SDL.queryTexture tex
   let wi = SDL.textureWidth textureInfo
