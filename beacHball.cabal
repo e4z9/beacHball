@@ -16,6 +16,10 @@ data-dir:     data
 data-files:   potato_sml.bmp
             , potato_sml2.bmp
 
+extra-source-files:   README.md
+                    , stack.yaml
+                    , data/potato.png
+
 executable beacHball
   hs-source-dirs:      src
   main-is:             Main.hs
