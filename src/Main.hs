@@ -42,8 +42,8 @@ instance Scene GameScene where
 
 startScene :: SDL.Renderer -> IO GameScene
 startScene renderer = do
-  potato1 <- loadTexture renderer =<< getDataFileName "potato_sml.bmp"
-  potato2 <- loadTexture renderer =<< getDataFileName "potato_sml2.bmp"
+  potato1 <- loadTexture renderer =<< getDataFileName "potato_sml.png"
+  potato2 <- loadTexture renderer =<< getDataFileName "potato_sml2.png"
   return $ GameScene (Sprite potato1 50 250) (Sprite potato2 350 250)
 
 logic :: (HasTime t s, Monad m) => Wire s () m (GameScene, [SDL.Event]) GameScene
