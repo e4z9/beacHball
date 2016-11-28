@@ -16,22 +16,12 @@ import FRP.Netwire
 import qualified SDL
 import Prelude hiding ((.))
 
-playerSpeed :: Float
-playerSpeed = 200
-
-speedControl :: (Monoid e, Monad m) => SDL.Scancode -> SDL.Scancode -> Wire s e m Keys Float
-speedControl left right = pure 0 . scancodePressed left . scancodePressed right
-      <|> pure (-playerSpeed) . scancodePressed left
-      <|> pure playerSpeed . scancodePressed right
-      <|> pure 0
-
-pos1 :: (HasTime t s, Monoid e, Monad m) => Wire s e m Keys Float
-pos1 = integral 50 . speedControl SDL.ScancodeA SDL.ScancodeD
-
-pos2 :: (HasTime t s, Monoid e, Monad m) => Wire s e m Keys Float
-pos2 = integral 350 . speedControl SDL.ScancodeLeft SDL.ScancodeRight
+type Velocity = Float
+type Position = Float
 
 data GameScene = GameScene {
+  _width :: Float,
+  _height :: Float,
   _player1 :: Sprite,
   _player2 :: Sprite
 }
@@ -40,18 +30,56 @@ makeLenses ''GameScene
 instance Scene GameScene where
   renderScene s f = f (view player1 s) >> f (view player2 s)
 
-startScene :: SDL.Renderer -> IO GameScene
-startScene renderer = do
+playerSpeed :: Velocity
+playerSpeed = 200
+
+playerHSpeed :: (Monoid e, Monad m) => SDL.Scancode -> SDL.Scancode -> Wire s e m Keys Velocity
+playerHSpeed left right = pure 0 . scancodePressed left . scancodePressed right
+      <|> pure (-playerSpeed) . scancodePressed left
+      <|> pure playerSpeed . scancodePressed right
+      <|> pure 0
+
+playerHMove :: HasTime t s => Wire s e m (Position, Velocity) Position
+playerHMove = mkPure $ \ds (p, v) ->
+  let dt = realToFrac $ dtime ds
+  in (Right (p + v * dt), playerHMove)
+
+bounded :: Ord a => a -> a -> Wire s e m a a
+bounded mini maxi = mkSF_ $ \a ->
+  if a <= mini then mini
+  else if maxi <= a then maxi
+  else a
+
+playerHPos :: (HasTime t s, Monoid e, Monad m) => Position -> Position -> SDL.Scancode -> SDL.Scancode -> Wire s e m (Position, Keys) Position
+playerHPos mini maxi left right = proc (p, keys) -> do
+  v <- playerHSpeed left right -< keys
+  bounded mini maxi <<< playerHMove -< (p, v)
+
+player1HPos :: (HasTime t s, Monoid e, Monad m) => GameScene -> Wire s e m (Position, Keys) Position
+player1HPos startScene = playerHPos 0 (view width startScene / 2 - 91) SDL.ScancodeA SDL.ScancodeD
+
+player2HPos :: (HasTime t s, Monoid e, Monad m) => GameScene -> Wire s e m (Position, Keys) Position
+player2HPos startScene = playerHPos (view width startScene / 2) (view width startScene - 91) SDL.ScancodeLeft SDL.ScancodeRight
+
+startScene :: SDL.Window -> SDL.Renderer -> IO GameScene
+startScene window renderer = do
+  windowConfig <- SDL.getWindowConfig window
+  let (SDL.V2 wi hi) = SDL.windowInitialSize windowConfig
+      width = fromIntegral wi
+      height = fromIntegral hi
+      playerVPos = height - height / 4 - 50
   potato1 <- loadTexture renderer =<< getDataFileName "potato_sml.png"
   potato2 <- loadTexture renderer =<< getDataFileName "potato_sml2.png"
-  return $ GameScene (Sprite potato1 50 250) (Sprite potato2 350 250)
+  return $ GameScene width height
+                     (Sprite potato1 (width / 4 - 45) playerVPos)
+                     (Sprite potato2 (width - width / 4 - 45) playerVPos)
 
-logic :: (HasTime t s, Monad m) => Wire s () m (GameScene, [SDL.Event]) GameScene
-logic = proc (scene, events) -> do
+logic :: (HasTime t s, Monad m) => GameScene -> Wire s () m (GameScene, [SDL.Event]) GameScene
+logic startScene = proc (scene, events) -> do
   untilQuitOrClose -< events
   keys <- handleKeyEvents -< events
-  x1 <- pos1 -< keys
-  x2 <- pos2 -< keys
+  x1 <- player1HPos startScene -< (view (player1 . x) scene, keys)
+  x2 <- player2HPos startScene -< (view (player2 . x) scene, keys)
   returnA -< set (player2 . x) x2 . set (player1 . x) x1 $ scene
 
 anyRenderingDriver = -1
@@ -59,10 +87,10 @@ anyRenderingDriver = -1
 main :: IO ()
 main = do
   SDL.initialize [SDL.InitVideo]
-  window <- SDL.createWindow "BeacHball" SDL.defaultWindow
+  window <- SDL.createWindow "BeacHball" (SDL.defaultWindow { SDL.windowInitialSize = SDL.V2 1280 720 })
   let vsyncRenderer = SDL.defaultRenderer { SDL.rendererType = SDL.AcceleratedVSyncRenderer }
   renderer <- SDL.createRenderer window anyRenderingDriver vsyncRenderer
-  scene <- startScene renderer
+  scene <- startScene window renderer
   render renderer scene
-  renderLoop renderer scene clockSession_ logic
+  renderLoop renderer scene clockSession_ (logic scene)
   SDL.quit
