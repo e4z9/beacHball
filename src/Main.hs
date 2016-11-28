@@ -56,23 +56,32 @@ playerHPos mini maxi left right = proc (p, keys) -> do
   bounded mini maxi <<< playerHMove -< (p, v)
 
 player1HPos :: (HasTime t s, Monoid e, Monad m) => GameScene -> Wire s e m (Position, Keys) Position
-player1HPos startScene = playerHPos 0 (view width startScene / 2 - 91) SDL.ScancodeA SDL.ScancodeD
+player1HPos startScene =
+  let halfScreen = view width startScene / 2
+      spriteWidth = fromIntegral $ view (player1 . w) startScene
+  in  playerHPos 0 (halfScreen - spriteWidth) SDL.ScancodeA SDL.ScancodeD
 
 player2HPos :: (HasTime t s, Monoid e, Monad m) => GameScene -> Wire s e m (Position, Keys) Position
-player2HPos startScene = playerHPos (view width startScene / 2) (view width startScene - 91) SDL.ScancodeLeft SDL.ScancodeRight
+player2HPos startScene =
+  let halfScreen = view width startScene / 2
+      spriteWidth = fromIntegral $ view (player1 . w) startScene
+  in  playerHPos halfScreen (view width startScene - spriteWidth) SDL.ScancodeLeft SDL.ScancodeRight
 
 startScene :: SDL.Window -> SDL.Renderer -> IO GameScene
 startScene window renderer = do
   windowConfig <- SDL.getWindowConfig window
+  p1 <- createSprite renderer =<< getDataFileName "potato_sml.png"
+  p2 <- createSprite renderer =<< getDataFileName "potato_sml2.png"
   let (SDL.V2 wi hi) = SDL.windowInitialSize windowConfig
       width = fromIntegral wi
       height = fromIntegral hi
-      playerVPos = height - height / 4 - 50
-  potato1 <- loadTexture renderer =<< getDataFileName "potato_sml.png"
-  potato2 <- loadTexture renderer =<< getDataFileName "potato_sml2.png"
-  return $ GameScene width height
-                     (Sprite potato1 (width / 4 - 45) playerVPos)
-                     (Sprite potato2 (width - width / 4 - 45) playerVPos)
+      playerVPos = height - height / 4 - fromIntegral (view h p1) / 2
+      wHalf = fromIntegral (view w p1) / 2
+  return $ set (player1 . x) (width / 4 - wHalf) .
+           set (player1 . y) playerVPos .
+           set (player2 . x) (width - width / 4 - wHalf) .
+           set (player2 . y) playerVPos
+           $ GameScene width height p1 p2
 
 logic :: (HasTime t s, Monad m) => GameScene -> Wire s () m (GameScene, [SDL.Event]) GameScene
 logic startScene = proc (scene, events) -> do

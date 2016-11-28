@@ -16,17 +16,24 @@ import Prelude hiding ((.))
 data Sprite = Sprite {
   _texture :: SDL.Texture,
   _x :: Float,
-  _y :: Float
+  _y :: Float,
+  _w :: Int,
+  _h :: Int
 }
 makeLenses ''Sprite
 
 class Scene s where
   renderScene :: MonadIO m => s -> (Sprite -> m ()) -> m ()
 
+createSprite :: MonadIO m => SDL.Renderer -> FilePath -> m Sprite
+createSprite renderer texturePath = do
+  (texture, w, h) <- loadTexture renderer texturePath
+  return $ Sprite texture 0 0 w h
+
 byteStringFromVector :: V.Vector Word8 -> B.ByteString
 byteStringFromVector = B.pack . V.toList
 
-loadTexture :: MonadIO m => SDL.Renderer -> FilePath -> m SDL.Texture
+loadTexture :: MonadIO m => SDL.Renderer -> FilePath -> m (SDL.Texture, Int, Int)
 loadTexture renderer path = do
   maybeImage <- liftIO $ I.readImage path
   let image = either (\_ -> I.Image 0 0 mempty :: I.Image I.PixelRGBA8)
@@ -37,16 +44,15 @@ loadTexture renderer path = do
   tex <- SDL.createTexture renderer SDL.ABGR8888 SDL.TextureAccessStreaming (SDL.V2 w h)
   tex2 <- SDL.updateTexture tex Nothing (byteStringFromVector (I.imageData image)) (4 * w)
   SDL.textureBlendMode tex2 SDL.$= SDL.BlendAlphaBlend
-  return tex2
+  return (tex2, fromIntegral w, fromIntegral h)
 
 renderSprite :: MonadIO m => SDL.Renderer -> Sprite -> m ()
 renderSprite r sprite = do
   let xi = round $ view x sprite
   let yi = round $ view y sprite
   let tex = view texture sprite
-  textureInfo <- SDL.queryTexture tex
-  let wi = SDL.textureWidth textureInfo
-  let hi = SDL.textureHeight textureInfo
+  let wi = fromIntegral $ view w sprite
+  let hi = fromIntegral $ view h sprite
   SDL.copy r tex Nothing $ Just $ SDL.Rectangle (SDL.P (SDL.V2 xi yi)) (SDL.V2 wi hi)
 
 render :: (MonadIO m, Scene s) => SDL.Renderer -> s -> m ()
