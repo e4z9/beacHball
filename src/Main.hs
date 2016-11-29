@@ -58,14 +58,14 @@ playerHPos mini maxi left right = proc (p, keys) -> do
 player1HPos :: (HasTime t s, Monoid e, Monad m) => GameScene -> Wire s e m (Position, Keys) Position
 player1HPos startScene =
   let halfScreen = view width startScene / 2
-      spriteWidth = fromIntegral $ view (player1 . w) startScene
-  in  playerHPos 0 (halfScreen - spriteWidth) SDL.ScancodeA SDL.ScancodeD
+      halfSpriteWidth = fromIntegral (view (player1 . w) startScene) / 2
+  in  playerHPos halfSpriteWidth (halfScreen - halfSpriteWidth) SDL.ScancodeA SDL.ScancodeD
 
 player2HPos :: (HasTime t s, Monoid e, Monad m) => GameScene -> Wire s e m (Position, Keys) Position
 player2HPos startScene =
   let halfScreen = view width startScene / 2
-      spriteWidth = fromIntegral $ view (player1 . w) startScene
-  in  playerHPos halfScreen (view width startScene - spriteWidth) SDL.ScancodeLeft SDL.ScancodeRight
+      halfSpriteWidth = fromIntegral (view (player1 . w) startScene) / 2
+  in  playerHPos (halfScreen + halfSpriteWidth) (view width startScene - halfSpriteWidth) SDL.ScancodeLeft SDL.ScancodeRight
 
 startScene :: SDL.Window -> SDL.Renderer -> IO GameScene
 startScene window renderer = do
@@ -75,11 +75,10 @@ startScene window renderer = do
   let (SDL.V2 wi hi) = SDL.windowInitialSize windowConfig
       width = fromIntegral wi
       height = fromIntegral hi
-      playerVPos = height - height / 4 - fromIntegral (view h p1) / 2
-      wHalf = fromIntegral (view w p1) / 2
-  return $ set (player1 . x) (width / 4 - wHalf) .
+      playerVPos = height - height / 4
+  return $ set (player1 . x) (width / 4) .
            set (player1 . y) playerVPos .
-           set (player2 . x) (width - width / 4 - wHalf) .
+           set (player2 . x) (width - width / 4) .
            set (player2 . y) playerVPos
            $ GameScene width height p1 p2
 

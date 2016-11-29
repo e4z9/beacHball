@@ -13,8 +13,20 @@ import Foreign.C.Types
 import qualified SDL
 import Prelude hiding ((.))
 
+data Anchor =
+  AnchorTopLeft |
+  AnchorTopMid |
+  AnchorTopRight |
+  AnchorMidLeft |
+  AnchorCenter |
+  AnchorMidRight |
+  AnchorBottomLeft |
+  AnchorBottomMid |
+  AnchorBottomRight
+
 data Sprite = Sprite {
   _texture :: SDL.Texture,
+  _anchor :: Anchor,
   _x :: Float,
   _y :: Float,
   _w :: Int,
@@ -28,7 +40,24 @@ class Scene s where
 createSprite :: MonadIO m => SDL.Renderer -> FilePath -> m Sprite
 createSprite renderer texturePath = do
   (texture, w, h) <- loadTexture renderer texturePath
-  return $ Sprite texture 0 0 w h
+  return $ Sprite texture AnchorCenter 0 0 w h
+
+spriteTopLeft :: Sprite -> (Float, Float)
+spriteTopLeft sprite =
+  let xs = view x sprite
+      ys = view y sprite
+      ws = fromIntegral $ view w sprite
+      hs = fromIntegral $ view h sprite
+  in case view anchor sprite of
+    AnchorTopLeft     -> (xs, ys)
+    AnchorTopMid      -> (xs - ws / 2, ys)
+    AnchorTopRight    -> (xs - ws, ys)
+    AnchorMidLeft     -> (xs, ys - hs / 2)
+    AnchorCenter      -> (xs - ws / 2, ys - hs / 2)
+    AnchorMidRight    -> (xs - ws, ys - hs / 2)
+    AnchorBottomLeft  -> (xs, ys - hs)
+    AnchorBottomMid   -> (xs - ws / 2, ys - hs)
+    AnchorBottomRight -> (xs - ws, ys - hs)
 
 byteStringFromVector :: V.Vector Word8 -> B.ByteString
 byteStringFromVector = B.pack . V.toList
@@ -48,11 +77,12 @@ loadTexture renderer path = do
 
 renderSprite :: MonadIO m => SDL.Renderer -> Sprite -> m ()
 renderSprite r sprite = do
-  let xi = round $ view x sprite
-  let yi = round $ view y sprite
-  let tex = view texture sprite
-  let wi = fromIntegral $ view w sprite
-  let hi = fromIntegral $ view h sprite
+  let (xp, yp) = spriteTopLeft sprite
+      xi = fromIntegral $ round xp
+      yi = fromIntegral $ round yp
+      tex = view texture sprite
+      wi = fromIntegral $ view w sprite
+      hi = fromIntegral $ view h sprite
   SDL.copy r tex Nothing $ Just $ SDL.Rectangle (SDL.P (SDL.V2 xi yi)) (SDL.V2 wi hi)
 
 render :: (MonadIO m, Scene s) => SDL.Renderer -> s -> m ()
