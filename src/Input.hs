@@ -48,3 +48,6 @@ isScancodePressed code = any ((==) code . SDL.keysymScancode)
 
 scancodePressed :: (Monoid e, Monad m) => SDL.Scancode -> Wire s e m Keys Keys
 scancodePressed k = when (isScancodePressed k)
+
+scancodeTriggered :: SDL.Scancode -> Wire s e m Keys (Event Keys)
+scancodeTriggered k = became $ isScancodePressed k
