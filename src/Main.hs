@@ -87,17 +87,25 @@ player2HPos startScene =
       halfSpriteWidth = fromIntegral (view (player1 . playerSprite . w) startScene) / 2
   in  playerHPos (halfScreen + halfSpriteWidth) (view width startScene - halfSpriteWidth)
 
-jump :: (HasTime t s, Fractional t, Monoid e, Monad m) => Wire s e m (Keys, Player) Player
-jump = proc (_, player) -> do
-  v <- for 0.3 . mkConst (Right (-800)) --> for 0.3 . mkConst (Right 800) -< ()
-  nexty <- move -< (view playerY player, v)
-  returnA -< set playerY nexty player
+gravitation = -2500
+jumpVelocity = -1000
 
-playerVPos :: (HasTime t s, Fractional t, Monoid e, Monad m) => Position -> Wire s e m (Keys, Player) Player
+jump :: (HasTime t s, Monoid e) => Position -> Wire s e m (Keys, Player) Player
+jump startY = jump' 0
+  where
+    jump' t' = mkPure $ \ds (_, player) ->
+      let t = t' + dtime ds
+          tf = realToFrac t
+          y = startY + jumpVelocity * tf - gravitation / 2 * tf * tf
+          result = if y > startY then Left mempty
+                   else Right (set playerY y player)
+      in (result, jump' t)
+
+playerVPos :: (HasTime t s, Monoid e, Monad m) => Position -> Wire s e m (Keys, Player) Player
 playerVPos startPos = switch (setFixedY &&& jumpSwitch) --> playerVPos startPos
   where
     setFixedY = mkSF_ $ \(_, player) -> set playerY startPos player
-    jumpSwitch = (fmap (const jump) <$> scancodeTriggered) <<< getUpKey
+    jumpSwitch = (fmap (const (jump startPos)) <$> scancodeTriggered) <<< getUpKey
     getUpKey = fmap (view upKey) <$> returnA
 
 startScene :: SDL.Window -> SDL.Renderer -> IO GameScene
@@ -117,7 +125,7 @@ startScene window renderer = do
            set (player2 . playerY) playerVPos
            $ GameScene width height p1 p2
 
-logic :: (HasTime t s, Fractional t,  Monad m) => GameScene -> Wire s () m (GameScene, [SDL.Event]) GameScene
+logic :: (HasTime t s, Monad m) => GameScene -> Wire s () m (GameScene, [SDL.Event]) GameScene
 logic startScene = proc (scene, events) -> do
   untilQuitOrClose -< events
   keys <- handleKeyEvents -< events
