@@ -37,6 +37,7 @@ playerY = playerSprite . y
 data GameScene = GameScene {
   _width :: Float,
   _height :: Float,
+  _background :: Sprite,
   _player1 :: Player,
   _player2 :: Player
 }
@@ -44,6 +45,7 @@ makeLenses ''GameScene
 
 instance Scene GameScene where
   renderScene s f = do
+    f $ view background s
     f $ view (player1 . playerSprite) s
     f $ view (player2 . playerSprite) s
 
@@ -114,7 +116,7 @@ createPlayer1 r w h = do
   sprite <- createSprite r =<< getDataFileName "potato_sml.png"
   let player = Player SDL.ScancodeA SDL.ScancodeD SDL.ScancodeW 0 sprite
   return $ set playerX (w / 4) .
-           set playerY (h - h / 4)
+           set playerY (h - h / 5)
            $ player
 
 createPlayer2 :: SDL.Renderer -> Float -> Float -> IO Player
@@ -122,8 +124,19 @@ createPlayer2 r w h = do
   sprite <- createSprite r =<< getDataFileName "potato_sml2.png"
   let player = Player SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp 0 sprite
   return $ set playerX (w - w / 4) .
-           set playerY (h - h / 4)
+           set playerY (h - h / 5)
            $ player
+
+createBackground :: SDL.Renderer -> Float -> Float -> IO Sprite
+createBackground r w h = do
+  (tex, twi, thi) <- loadTexture r =<< getDataFileName "background.png"
+  let xp = w / 2
+      yp = h
+      tw = fromIntegral twi :: Float
+      th = fromIntegral thi :: Float
+      (sw, sh) = if w / h > tw / th then (round w, round (th * w / tw))
+                 else (round (tw * h / th), round h)
+  return $ Sprite tex AnchorBottomMid xp yp sw sh
 
 startScene :: SDL.Window -> SDL.Renderer -> IO GameScene
 startScene window renderer = do
@@ -133,7 +146,8 @@ startScene window renderer = do
       height = fromIntegral hi
   p1 <- createPlayer1 renderer width height
   p2 <- createPlayer2 renderer width height
-  return $ GameScene width height p1 p2
+  bg <- createBackground renderer width height
+  return $ GameScene width height bg p1 p2
 
 logic :: (HasTime t s, Monad m) => GameScene -> Wire s () m (GameScene, [SDL.Event]) GameScene
 logic startScene = proc (scene, events) -> do
@@ -152,7 +166,7 @@ anyRenderingDriver = -1
 main :: IO ()
 main = do
   SDL.initialize [SDL.InitVideo]
-  window <- SDL.createWindow "BeacHball" (SDL.defaultWindow { SDL.windowInitialSize = SDL.V2 1280 720 })
+  window <- SDL.createWindow "BeacHball" (SDL.defaultWindow { SDL.windowInitialSize = SDL.V2 1280 820 })
   let vsyncRenderer = SDL.defaultRenderer { SDL.rendererType = SDL.AcceleratedVSyncRenderer }
   renderer <- SDL.createRenderer window anyRenderingDriver vsyncRenderer
   scene <- startScene window renderer
