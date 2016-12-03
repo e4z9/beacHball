@@ -108,22 +108,31 @@ playerVPos startPos = switch (setFixedY &&& jumpSwitch) --> playerVPos startPos
     jumpSwitch = (fmap (const (jump startPos)) <$> scancodeTriggered) <<< getUpKey
     getUpKey = fmap (view upKey) <$> returnA
 
+createPlayer1 :: SDL.Renderer -> Float -> Float -> IO Player
+createPlayer1 r w h = do
+  sprite <- createSprite r =<< getDataFileName "potato_sml.png"
+  let player = Player SDL.ScancodeA SDL.ScancodeD SDL.ScancodeW sprite
+  return $ set playerX (w / 4) .
+           set playerY (h - h / 4)
+           $ player
+
+createPlayer2 :: SDL.Renderer -> Float -> Float -> IO Player
+createPlayer2 r w h = do
+  sprite <- createSprite r =<< getDataFileName "potato_sml2.png"
+  let player = Player SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp sprite
+  return $ set playerX (w - w / 4) .
+           set playerY (h - h / 4)
+           $ player
+
 startScene :: SDL.Window -> SDL.Renderer -> IO GameScene
 startScene window renderer = do
   windowConfig <- SDL.getWindowConfig window
-  ps1 <- createSprite renderer =<< getDataFileName "potato_sml.png"
-  ps2 <- createSprite renderer =<< getDataFileName "potato_sml2.png"
   let (SDL.V2 wi hi) = SDL.windowInitialSize windowConfig
       width = fromIntegral wi
       height = fromIntegral hi
-      p1 = Player SDL.ScancodeA SDL.ScancodeD SDL.ScancodeW ps1
-      p2 = Player SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp ps2
-      playerVPos = height - height / 4
-  return $ set (player1 . playerX) (width / 4) .
-           set (player1 . playerY) playerVPos .
-           set (player2 . playerX) (width - width / 4) .
-           set (player2 . playerY) playerVPos
-           $ GameScene width height p1 p2
+  p1 <- createPlayer1 renderer width height
+  p2 <- createPlayer2 renderer width height
+  return $ GameScene width height p1 p2
 
 logic :: (HasTime t s, Monad m) => GameScene -> Wire s () m (GameScene, [SDL.Event]) GameScene
 logic startScene = proc (scene, events) -> do
