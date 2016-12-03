@@ -23,6 +23,7 @@ data Player = Player {
   _leftKey :: SDL.Scancode,
   _rightKey :: SDL.Scancode,
   _upKey :: SDL.Scancode,
+  _playerYV :: Float,
   _playerSprite :: Sprite
 }
 makeLenses ''Player
@@ -87,31 +88,31 @@ player2HPos startScene =
       halfSpriteWidth = fromIntegral (view (player1 . playerSprite . w) startScene) / 2
   in  playerHPos (halfScreen + halfSpriteWidth) (view width startScene - halfSpriteWidth)
 
-gravitation = -2500
+gravitation = 2500
 jumpVelocity = -1000
 
-jump :: (HasTime t s, Monoid e) => Position -> Wire s e m (Keys, Player) Player
-jump startY = jump' 0
-  where
-    jump' t' = mkPure $ \ds (_, player) ->
-      let t = t' + dtime ds
-          tf = realToFrac t
-          y = startY + jumpVelocity * tf - gravitation / 2 * tf * tf
-          result = if y > startY then Left mempty
-                   else Right (set playerY y player)
-      in (result, jump' t)
+applyGravitation :: HasTime t s => Wire s e m (Position, Velocity) (Position, Velocity)
+applyGravitation = mkPure $ \ds (p, v) ->
+  let dt = realToFrac $ dtime ds
+      nextv = v + gravitation * dt
+      nextp = p + (v + nextv) / 2 * dt -- trapezoidal rule
+  in (Right (nextp, nextv), applyGravitation)
 
 playerVPos :: (HasTime t s, Monoid e, Monad m) => Position -> Wire s e m (Keys, Player) Player
-playerVPos startPos = switch (setFixedY &&& jumpSwitch) --> playerVPos startPos
-  where
-    setFixedY = mkSF_ $ \(_, player) -> set playerY startPos player
-    jumpSwitch = (fmap (const (jump startPos)) <$> scancodeTriggered) <<< getUpKey
-    getUpKey = fmap (view upKey) <$> returnA
+playerVPos baseY = proc (keys, player) -> do
+  let canJump = view playerYV player == 0 && view playerY player >= baseY
+      wantJump = isScancodePressed (view upKey player) keys
+      player' = if canJump && wantJump then set playerYV jumpVelocity player
+                else player
+  (nexty, nextyv) <- applyGravitation -< (view playerY player', view playerYV player')
+  let (nexty', nextyv') = if nexty >= baseY then (baseY, 0)
+                          else (nexty, nextyv)
+  returnA -< set playerY nexty' . set playerYV nextyv' $ player'
 
 createPlayer1 :: SDL.Renderer -> Float -> Float -> IO Player
 createPlayer1 r w h = do
   sprite <- createSprite r =<< getDataFileName "potato_sml.png"
-  let player = Player SDL.ScancodeA SDL.ScancodeD SDL.ScancodeW sprite
+  let player = Player SDL.ScancodeA SDL.ScancodeD SDL.ScancodeW 0 sprite
   return $ set playerX (w / 4) .
            set playerY (h - h / 4)
            $ player
@@ -119,7 +120,7 @@ createPlayer1 r w h = do
 createPlayer2 :: SDL.Renderer -> Float -> Float -> IO Player
 createPlayer2 r w h = do
   sprite <- createSprite r =<< getDataFileName "potato_sml2.png"
-  let player = Player SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp sprite
+  let player = Player SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp 0 sprite
   return $ set playerX (w - w / 4) .
            set playerY (h - h / 4)
            $ player
