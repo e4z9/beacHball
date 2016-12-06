@@ -47,8 +47,9 @@ cloudX = cloudSprite . x
 data GameScene = GameScene {
   _width :: Float,
   _height :: Float,
-  _background :: Sprite,
+  _sun :: Sprite,
   _clouds :: [Cloud],
+  _background :: Sprite,
   _player1 :: Player,
   _player2 :: Player
 }
@@ -56,10 +57,12 @@ makeLenses ''GameScene
 
 instance Scene GameScene where
   renderScene s f = do
-    f $ view background s
+    f $ view sun s
     mapM_ (f . view cloudSprite) $ view clouds s
+    f $ view background s
     f $ view (player1 . playerSprite) s
     f $ view (player2 . playerSprite) s
+  clearColor _ = SDL.V4 155 220 255 255
 
 playerSpeed :: Velocity
 playerSpeed = 200
@@ -151,6 +154,11 @@ createPlayer2 r w h = do
            set playerY (h - h / 5)
            $ player
 
+createSun :: SDL.Renderer -> Float -> IO Sprite
+createSun r w = do
+  sprite <- createSprite r =<< getDataFileName "sun.png"
+  return $ set x (3 * w / 4) . set y 0 . set anchor AnchorTopMid $ sprite
+
 createBackground :: SDL.Renderer -> Float -> Float -> IO Sprite
 createBackground r w h = do
   (tex, twi, thi) <- loadTexture r =<< getDataFileName "background.png"
@@ -158,8 +166,7 @@ createBackground r w h = do
       yp = h
       tw = fromIntegral twi :: Float
       th = fromIntegral thi :: Float
-      (sw, sh) = if w / h > tw / th then (round w, round (th * w / tw))
-                 else (round (tw * h / th), round h)
+      (sw, sh) = (round w, round (th * w / tw))
   return $ Sprite tex AnchorBottomMid xp yp sw sh
 
 createCloud :: SDL.Renderer -> Float -> Float -> FilePath -> IO Cloud
@@ -183,9 +190,10 @@ startScene window renderer = do
       height = fromIntegral hi
   p1 <- createPlayer1 renderer width height
   p2 <- createPlayer2 renderer width height
+  sun <- createSun renderer width
   bg <- createBackground renderer width height
   clouds <- createClouds renderer width height
-  return $ GameScene width height bg clouds p1 p2
+  return $ GameScene width height sun clouds bg p1 p2
 
 logic :: (HasTime t s, Monad m) => GameScene -> Wire s () m (GameScene, [SDL.Event]) GameScene
 logic startScene = proc (scene, events) -> do

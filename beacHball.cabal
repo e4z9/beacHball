@@ -21,6 +21,7 @@ data-files:   potato_sml.png
             , cloud3.png
             , cloud4.png
             , cloud5.png
+            , sun.png
 
 extra-source-files:   README.md
                     , stack.yaml

@@ -36,6 +36,7 @@ makeLenses ''Sprite
 
 class Scene s where
   renderScene :: MonadIO m => s -> (Sprite -> m ()) -> m ()
+  clearColor :: s -> SDL.V4 Word8
 
 createSprite :: MonadIO m => SDL.Renderer -> FilePath -> m Sprite
 createSprite renderer texturePath = do
@@ -87,7 +88,7 @@ renderSprite r sprite = do
 
 render :: (MonadIO m, Scene s) => SDL.Renderer -> s -> m ()
 render r scene = do
-  SDL.rendererDrawColor r SDL.$= SDL.V4 255 255 255 255
+  SDL.rendererDrawColor r SDL.$= clearColor scene
   SDL.clear r
   renderScene scene $ renderSprite r
   SDL.present r
