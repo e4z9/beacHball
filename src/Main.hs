@@ -14,6 +14,7 @@ import Control.Monad.IO.Class
 import Control.Wire
 import FRP.Netwire
 import qualified SDL
+import System.Random
 import Prelude hiding ((.))
 
 type Velocity = Float
@@ -34,10 +35,20 @@ playerX = playerSprite . x
 playerY :: Lens' Player Float
 playerY = playerSprite . y
 
+data Cloud = Cloud {
+  _cloudXV :: Float,
+  _cloudSprite :: Sprite
+}
+makeLenses ''Cloud
+
+cloudX :: Lens' Cloud Float
+cloudX = cloudSprite . x
+
 data GameScene = GameScene {
   _width :: Float,
   _height :: Float,
   _background :: Sprite,
+  _clouds :: [Cloud],
   _player1 :: Player,
   _player2 :: Player
 }
@@ -46,6 +57,7 @@ makeLenses ''GameScene
 instance Scene GameScene where
   renderScene s f = do
     f $ view background s
+    mapM_ (f . view cloudSprite) $ view clouds s
     f $ view (player1 . playerSprite) s
     f $ view (player2 . playerSprite) s
 
@@ -111,6 +123,18 @@ playerVPos baseY = proc (keys, player) -> do
                           else (nexty, nextyv)
   returnA -< set playerY nexty' . set playerYV nextyv' $ player'
 
+moveCloudStep :: Float -> Float -> Cloud -> Cloud
+moveCloudStep w dt cloud =
+  let vel = view cloudXV cloud
+      cx = view cloudX cloud
+      cx' = if cx < w then cx else -w / 2
+  in  set cloudX (cx' + vel * dt) cloud
+
+moveClouds :: (HasTime t s, Monad m) => Float -> Wire s e m [Cloud] [Cloud]
+moveClouds w = mkPure $ \ds clouds ->
+  let dt = realToFrac $ dtime ds
+  in  (Right $ map (moveCloudStep w dt) clouds, moveClouds w)
+
 createPlayer1 :: SDL.Renderer -> Float -> Float -> IO Player
 createPlayer1 r w h = do
   sprite <- createSprite r =<< getDataFileName "potato_sml.png"
@@ -138,6 +162,19 @@ createBackground r w h = do
                  else (round (tw * h / th), round h)
   return $ Sprite tex AnchorBottomMid xp yp sw sh
 
+createCloud :: SDL.Renderer -> Float -> Float -> FilePath -> IO Cloud
+createCloud r w h path = do
+  sprite <- createSprite r path
+  xp <- randomRIO (- w / 2, w)
+  yp <- randomRIO (0, h / 4)
+  v <- randomRIO (2, 40)
+  return $ Cloud v $ set x xp . set y yp . set anchor AnchorTopLeft $ sprite
+
+createClouds :: SDL.Renderer -> Float -> Float -> IO [Cloud]
+createClouds r w h = do
+  paths <- mapM getDataFileName ["cloud" ++ show n ++ ".png" | n <- [1..5]]
+  mapM (createCloud r w h) paths
+
 startScene :: SDL.Window -> SDL.Renderer -> IO GameScene
 startScene window renderer = do
   windowConfig <- SDL.getWindowConfig window
@@ -147,7 +184,8 @@ startScene window renderer = do
   p1 <- createPlayer1 renderer width height
   p2 <- createPlayer2 renderer width height
   bg <- createBackground renderer width height
-  return $ GameScene width height bg p1 p2
+  clouds <- createClouds renderer width height
+  return $ GameScene width height bg clouds p1 p2
 
 logic :: (HasTime t s, Monad m) => GameScene -> Wire s () m (GameScene, [SDL.Event]) GameScene
 logic startScene = proc (scene, events) -> do
@@ -157,8 +195,10 @@ logic startScene = proc (scene, events) -> do
   p1' <- playerVPos (view (player1 . playerY) startScene) -< (keys, p1)
   p2 <- player2HPos startScene -< (keys, view player2 scene)
   p2' <- playerVPos (view (player2 . playerY) startScene) -< (keys, p2)
+  clouds' <- moveClouds (view width startScene) -< view clouds scene
   returnA -< set player2 p2' .
-             set player1 p1'
+             set player1 p1' .
+             set clouds clouds'
              $ scene
 
 anyRenderingDriver = -1

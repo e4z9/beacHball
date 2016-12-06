@@ -16,10 +16,20 @@ data-dir:     data
 data-files:   potato_sml.png
             , potato_sml2.png
             , background.png
+            , cloud1.png
+            , cloud2.png
+            , cloud3.png
+            , cloud4.png
+            , cloud5.png
 
 extra-source-files:   README.md
                     , stack.yaml
-                    , data/potato.png
+                    , data/src/cloud1.png
+                    , data/src/cloud2.png
+                    , data/src/cloud3.png
+                    , data/src/cloud4.png
+                    , data/src/cloud5.png
+                    , data/src/potato.png
 
 executable beacHball
   hs-source-dirs:      src
@@ -34,5 +44,6 @@ executable beacHball
                      , JuicyPixels
                      , lens
                      , netwire
+                     , random
                      , sdl2
                      , vector
