@@ -45,6 +45,3 @@ handleKeyEvents = handleKeyEvents' mempty
 
 isScancodePressed :: SDL.Scancode -> Keys -> Bool
 isScancodePressed code = any ((==) code . SDL.keysymScancode)
-
-scancodeTriggered :: Monad m => Wire s e m (Keys, SDL.Scancode) (Event SDL.Scancode)
-scancodeTriggered = fmap snd <$> became (uncurry (flip isScancodePressed))
