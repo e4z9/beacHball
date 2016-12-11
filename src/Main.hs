@@ -24,6 +24,7 @@ data Player = Player {
   _leftKey :: SDL.Scancode,
   _rightKey :: SDL.Scancode,
   _upKey :: SDL.Scancode,
+  _playerHBounds :: (Float, Float),
   _playerYV :: Float,
   _playerSprite :: Sprite
 }
@@ -67,7 +68,7 @@ instance Scene GameScene where
 playerSpeed :: Velocity
 playerSpeed = 200
 
-playerHSpeed :: (Monoid e, Monad m) => Wire s e m (Keys, Player) Velocity
+playerHSpeed :: Wire s e m (Keys, Player) Velocity
 playerHSpeed = mkSF_ $ \(keys, player) ->
   let left  = isScancodePressed (view leftKey player) keys
       right = isScancodePressed (view rightKey player) keys
@@ -81,29 +82,18 @@ move = mkPure $ \ds (p, v) ->
   let dt = realToFrac $ dtime ds
   in (Right (p + v * dt), move)
 
-bounded :: Ord a => a -> a -> Wire s e m a a
-bounded mini maxi = mkSF_ $ \a ->
-  if a <= mini then mini
-  else if maxi <= a then maxi
-  else a
+bounded :: Ord a => a -> a -> a -> a
+bounded mini maxi a
+  | a <= mini = mini
+  | maxi <= a = maxi
+  | otherwise = a
 
-playerHPos :: (HasTime t s, Monoid e, Monad m) => Position -> Position -> Wire s e m (Keys, Player) Player
-playerHPos mini maxi = proc (keys, player) -> do
+playerHPos :: (HasTime t s, Monad m) => Wire s e m (Keys, Player) Player
+playerHPos = proc (keys, player) -> do
   v <- playerHSpeed -< (keys, player)
-  nextx <- bounded mini maxi <<< move -< (view playerX player, v)
-  returnA -< set playerX nextx player
-
-player1HPos :: (HasTime t s, Monoid e, Monad m) => GameScene -> Wire s e m (Keys, Player) Player
-player1HPos startScene =
-  let halfScreen = view width startScene / 2
-      halfSpriteWidth = fromIntegral (view (player1 . playerSprite . w) startScene) / 2
-  in  playerHPos halfSpriteWidth (halfScreen - halfSpriteWidth)
-
-player2HPos :: (HasTime t s, Monoid e, Monad m) => GameScene -> Wire s e m (Keys, Player) Player
-player2HPos startScene =
-  let halfScreen = view width startScene / 2
-      halfSpriteWidth = fromIntegral (view (player1 . playerSprite . w) startScene) / 2
-  in  playerHPos (halfScreen + halfSpriteWidth) (view width startScene - halfSpriteWidth)
+  let (minX, maxX) = view playerHBounds player
+  nextx <- move -< (view playerX player, v)
+  returnA -< set playerX (bounded minX maxX nextx) player
 
 gravitation = 2500
 jumpVelocity = -1000
@@ -139,19 +129,27 @@ moveClouds w = mkPure $ \ds clouds ->
   in  (Right $ map (moveCloudStep w dt) clouds, moveClouds w)
 
 createPlayer1 :: SDL.Renderer -> Float -> Float -> IO Player
-createPlayer1 r w h = do
+createPlayer1 r width height = do
   sprite <- createSprite r =<< getDataFileName "potato_sml.png"
-  let player = Player SDL.ScancodeA SDL.ScancodeD SDL.ScancodeW 0 sprite
-  return $ set playerX (w / 4) .
-           set playerY (h - h / 5)
+  let halfSpriteW = fromIntegral (view w sprite) / 2
+      minX = halfSpriteW
+      maxX = width / 2 - halfSpriteW
+      player = Player SDL.ScancodeA SDL.ScancodeD SDL.ScancodeW
+                      (minX, maxX) 0 sprite
+  return $ set playerX (width / 4) .
+           set playerY (height - height / 5)
            $ player
 
 createPlayer2 :: SDL.Renderer -> Float -> Float -> IO Player
-createPlayer2 r w h = do
+createPlayer2 r width height = do
   sprite <- createSprite r =<< getDataFileName "potato_sml2.png"
-  let player = Player SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp 0 sprite
-  return $ set playerX (w - w / 4) .
-           set playerY (h - h / 5)
+  let halfSpriteW = fromIntegral (view w sprite) / 2
+      minX = width / 2 + halfSpriteW
+      maxX = width - halfSpriteW
+      player = Player SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp
+                      (minX, maxX) 0 sprite
+  return $ set playerX (width - width / 4) .
+           set playerY (height - height / 5)
            $ player
 
 createSun :: SDL.Renderer -> Float -> IO Sprite
@@ -199,9 +197,9 @@ logic :: (HasTime t s, Monad m) => GameScene -> Wire s () m (GameScene, [SDL.Eve
 logic startScene = proc (scene, events) -> do
   untilQuitOrClose -< events
   keys <- handleKeyEvents -< events
-  p1 <- player1HPos startScene -< (keys, view player1 scene)
+  p1 <- playerHPos -< (keys, view player1 scene)
   p1' <- playerVPos (view (player1 . playerY) startScene) -< (keys, p1)
-  p2 <- player2HPos startScene -< (keys, view player2 scene)
+  p2 <- playerHPos -< (keys, view player2 scene)
   p2' <- playerVPos (view (player2 . playerY) startScene) -< (keys, p2)
   clouds' <- moveClouds (view width startScene) -< view clouds scene
   returnA -< set player2 p2' .
