@@ -19,8 +19,8 @@ type Position = Float
 playerSpeed :: Velocity
 playerSpeed = 200
 
-playerHSpeed :: Wire s e m (Keys, Player) Velocity
-playerHSpeed = mkSF_ $ \(keys, player) ->
+playerHSpeed :: Keys -> Player -> Velocity
+playerHSpeed keys player =
   let left  = isScancodePressed (view leftKey player) keys
       right = isScancodePressed (view rightKey player) keys
   in  if left && right then 0
@@ -28,10 +28,8 @@ playerHSpeed = mkSF_ $ \(keys, player) ->
       else if right then playerSpeed
       else 0
 
-move :: HasTime t s => Wire s e m (Position, Velocity) Position
-move = mkPure $ \ds (p, v) ->
-  let dt = realToFrac $ dtime ds
-  in (Right (p + v * dt), move)
+moveByVelocity :: Float -> Velocity -> Position -> Position
+moveByVelocity dt v p = p + v * dt
 
 bounded :: Ord a => a -> a -> a -> a
 bounded mini maxi a
@@ -39,12 +37,13 @@ bounded mini maxi a
   | maxi <= a = maxi
   | otherwise = a
 
-playerHPos :: (HasTime t s, Monad m) => Wire s e m (Keys, Player) Player
-playerHPos = proc (keys, player) -> do
-  v <- playerHSpeed -< (keys, player)
-  let (minX, maxX) = view playerHBounds player
-  nextx <- move -< (view playerX player, v)
-  returnA -< set playerX (bounded minX maxX nextx) player
+playerHPos :: HasTime t s => Wire s e m (Keys, Player) Player
+playerHPos = mkPure $ \ds (keys, player) ->
+  let dt = realToFrac $ dtime ds
+      v = playerHSpeed keys player
+      (minX, maxX) = view playerHBounds player
+      nextx = bounded minX maxX . moveByVelocity dt v
+  in  (Right (over playerX nextx player), playerHPos)
 
 gravitation = 2500
 jumpVelocity = -1000
@@ -67,14 +66,18 @@ playerVPos baseY = proc (keys, player) -> do
                           else (nexty, nextyv)
   returnA -< set playerY nexty' . set playerYV nextyv' $ player'
 
+wrap :: Float -> Float -> Float -> Float
+wrap mini maxi p
+  | p > maxi  = mini + p - maxi
+  | p < mini  = maxi - (mini - p)
+  | otherwise = p
+
 moveCloudStep :: Float -> Float -> Cloud -> Cloud
 moveCloudStep w dt cloud =
   let vel = view cloudXV cloud
-      cx = view cloudX cloud
-      cx' = if cx < w then cx else -w / 2
-  in  set cloudX (cx' + vel * dt) cloud
+  in  over cloudX (wrap (-w/2) w . moveByVelocity dt vel) cloud
 
-moveClouds :: (HasTime t s, Monad m) => Float -> Wire s e m [Cloud] [Cloud]
+moveClouds :: HasTime t s => Float -> Wire s e m [Cloud] [Cloud]
 moveClouds w = mkPure $ \ds clouds ->
   let dt = realToFrac $ dtime ds
   in  (Right $ map (moveCloudStep w dt) clouds, moveClouds w)
