@@ -81,19 +81,52 @@ moveClouds w = mkPure $ \ds clouds ->
   let dt = realToFrac $ dtime ds
   in  (Right $ map (moveCloudStep w dt) clouds, moveClouds w)
 
+bounceWalls :: GameScene -> Ball -> Ball
+bounceWalls scene ball = bounceRight . bounceLeft $ ball
+  where halfBall :: Float
+        halfBall = fromIntegral (view (ballSprite . w) ball) / 2
+        bounceLeft b = if view ballX b - halfBall > 0 then b
+                       else set ballX halfBall . set ballXV (negate $ view ballXV b) $ b
+        sw = view width scene
+        bounceRight b = if view ballX b + halfBall < sw  then b
+                       else set ballX (sw - halfBall) . set ballXV (negate $ view ballXV b) $ b
+
+groundFactor = 2 / 3
+
+bounceGround :: GameScene -> Ball -> Ball
+bounceGround scene ball = if isBouncing then bounce ball else ball
+  where
+    base = view baseY scene - fromIntegral (view (ballSprite . h) ball) / 2
+    isBouncing = view ballY ball > base
+    bounce b = set ballY base . set ballYV (negate $ view ballYV b * groundFactor) .
+               set ballXV (view ballXV b * groundFactor)
+               $ b
+
+handleBallCollision :: GameScene -> Ball -> Ball
+handleBallCollision scene = bounceWalls scene . bounceGround scene
+
+updateBall :: HasTime t s => Wire s e m GameScene GameScene
+updateBall = mkPure $ \ds scene ->
+  let dt = realToFrac $ dtime ds
+      scene' = over ball (handleBallCollision scene) .
+               over (ball . ballYFrame) (moveWithGravityStep (gravity/2) dt) .
+               over (ball . ballXFrame) (moveStep dt) $ scene
+  in (Right scene', updateBall)
+
 logic :: (HasTime t s, Monad m) => GameScene -> Wire s () m (GameScene, [SDL.Event]) GameScene
 logic startScene = proc (scene, events) -> do
   untilQuitOrClose -< events
   keys <- handleKeyEvents -< events
   p1 <- playerHPos -< (keys, view player1 scene)
-  p1' <- playerVPos (view (player1 . playerY) startScene) -< (keys, p1)
+  p1' <- playerVPos (view baseY startScene) -< (keys, p1)
   p2 <- playerHPos -< (keys, view player2 scene)
-  p2' <- playerVPos (view (player2 . playerY) startScene) -< (keys, p2)
+  p2' <- playerVPos (view baseY startScene) -< (keys, p2)
   clouds' <- moveClouds (view width startScene) -< view clouds scene
+  scene' <- updateBall -< scene
   returnA -< set player2 p2' .
              set player1 p1' .
              set clouds clouds'
-             $ scene
+             $ scene'
 
 anyRenderingDriver = -1
 

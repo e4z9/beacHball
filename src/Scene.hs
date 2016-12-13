@@ -49,12 +49,35 @@ cloudXFrame :: Lens' Cloud (Float, Float)
 cloudXFrame = lens (view cloudX &&& view cloudXV)
                    (\c (p, v) -> (set cloudX p . set cloudXV v) c)
 
+data Ball = Ball {
+  _ballXV :: Float,
+  _ballYV :: Float,
+  _ballSprite :: Sprite
+}
+makeLenses ''Ball
+
+ballX :: Lens' Ball Float
+ballX = ballSprite . x
+
+ballY :: Lens' Ball Float
+ballY = ballSprite . y
+
+ballXFrame :: Lens' Ball (Float, Float)
+ballXFrame = lens (view ballX &&& view ballXV)
+                  (\c (p, v) -> (set ballX p . set ballXV v) c)
+
+ballYFrame :: Lens' Ball (Float, Float)
+ballYFrame = lens (view ballY &&& view ballYV)
+                  (\c (p, v) -> (set ballY p . set ballYV v) c)
+
 data GameScene = GameScene {
   _width :: Float,
   _height :: Float,
+  _baseY :: Float,
   _sun :: Sprite,
   _clouds :: [Cloud],
   _background :: Sprite,
+  _ball :: Ball,
   _player1 :: Player,
   _player2 :: Player
 }
@@ -65,12 +88,13 @@ instance Scene GameScene where
     f $ view sun s
     mapM_ (f . view cloudSprite) $ view clouds s
     f $ view background s
+    f $ view (ball . ballSprite) s
     f $ view (player1 . playerSprite) s
     f $ view (player2 . playerSprite) s
   clearColor _ = SDL.V4 155 220 255 255
 
 createPlayer1 :: SDL.Renderer -> Float -> Float -> IO Player
-createPlayer1 r width height = do
+createPlayer1 r width base = do
   sprite <- createSprite r =<< getDataFileName "potato_sml.png"
   let halfSpriteW = fromIntegral (view w sprite) / 2
       minX = halfSpriteW
@@ -78,11 +102,12 @@ createPlayer1 r width height = do
       player = Player SDL.ScancodeA SDL.ScancodeD SDL.ScancodeW
                       (minX, maxX) 0 0 sprite
   return $ set playerX (width / 4) .
-           set playerY (height - height / 5)
+           set playerY base .
+           set (playerSprite . anchor) AnchorBottomMid
            $ player
 
 createPlayer2 :: SDL.Renderer -> Float -> Float -> IO Player
-createPlayer2 r width height = do
+createPlayer2 r width base = do
   sprite <- createSprite r =<< getDataFileName "potato_sml2.png"
   let halfSpriteW = fromIntegral (view w sprite) / 2
       minX = width / 2 + halfSpriteW
@@ -90,8 +115,18 @@ createPlayer2 r width height = do
       player = Player SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp
                       (minX, maxX) 0 0 sprite
   return $ set playerX (width - width / 4) .
-           set playerY (height - height / 5)
+           set playerY base .
+           set (playerSprite . anchor) AnchorBottomMid
            $ player
+
+createBall :: SDL.Renderer -> Float -> Float -> IO Ball
+createBall r width height = do
+  sprite <- createSprite r =<< getDataFileName "ball.png"
+  xv <- randomRIO (-40, 40)
+  let ball = Ball (xv * 20) 0 sprite
+  return $ set ballX (width - width / 3) .
+           set ballY (height / 3)
+           $ ball
 
 createSun :: SDL.Renderer -> Float -> IO Sprite
 createSun r w = do
@@ -127,9 +162,11 @@ startScene window renderer = do
   let (SDL.V2 wi hi) = SDL.windowInitialSize windowConfig
       width = fromIntegral wi
       height = fromIntegral hi
-  p1 <- createPlayer1 renderer width height
-  p2 <- createPlayer2 renderer width height
+      base = height - height / 7
+  p1 <- createPlayer1 renderer width base
+  p2 <- createPlayer2 renderer width base
   sun <- createSun renderer width
   bg <- createBackground renderer width height
   clouds <- createClouds renderer width height
-  return $ GameScene width height sun clouds bg p1 p2
+  ball <- createBall renderer width height
+  return $ GameScene width height base sun clouds bg ball p1 p2
