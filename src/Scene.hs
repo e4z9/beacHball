@@ -6,6 +6,7 @@ import Graphics
 
 import Paths_beacHball
 
+import Control.Arrow
 import Control.Lens
 import qualified SDL
 import System.Random
@@ -15,6 +16,7 @@ data Player = Player {
   _rightKey :: SDL.Scancode,
   _upKey :: SDL.Scancode,
   _playerHBounds :: (Float, Float),
+  _playerXV :: Float,
   _playerYV :: Float,
   _playerSprite :: Sprite
 }
@@ -26,6 +28,14 @@ playerX = playerSprite . x
 playerY :: Lens' Player Float
 playerY = playerSprite . y
 
+playerXFrame :: Lens' Player (Float, Float)
+playerXFrame = lens (view playerX &&& view playerXV)
+                    (\pl (p, v) -> (set playerX p . set playerXV v) pl)
+
+playerYFrame :: Lens' Player (Float, Float)
+playerYFrame = lens (view playerY &&& view playerYV)
+                    (\pl (p, v) -> (set playerY p . set playerYV v) pl)
+
 data Cloud = Cloud {
   _cloudXV :: Float,
   _cloudSprite :: Sprite
@@ -34,6 +44,10 @@ makeLenses ''Cloud
 
 cloudX :: Lens' Cloud Float
 cloudX = cloudSprite . x
+
+cloudXFrame :: Lens' Cloud (Float, Float)
+cloudXFrame = lens (view cloudX &&& view cloudXV)
+                   (\c (p, v) -> (set cloudX p . set cloudXV v) c)
 
 data GameScene = GameScene {
   _width :: Float,
@@ -62,7 +76,7 @@ createPlayer1 r width height = do
       minX = halfSpriteW
       maxX = width / 2 - halfSpriteW
       player = Player SDL.ScancodeA SDL.ScancodeD SDL.ScancodeW
-                      (minX, maxX) 0 sprite
+                      (minX, maxX) 0 0 sprite
   return $ set playerX (width / 4) .
            set playerY (height - height / 5)
            $ player
@@ -74,7 +88,7 @@ createPlayer2 r width height = do
       minX = width / 2 + halfSpriteW
       maxX = width - halfSpriteW
       player = Player SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp
-                      (minX, maxX) 0 sprite
+                      (minX, maxX) 0 0 sprite
   return $ set playerX (width - width / 4) .
            set playerY (height - height / 5)
            $ player

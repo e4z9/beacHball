@@ -19,17 +19,18 @@ type Position = Float
 playerSpeed :: Velocity
 playerSpeed = 200
 
-playerHSpeed :: Keys -> Player -> Velocity
-playerHSpeed keys player =
+updatePlayerXV :: Keys -> Player -> Player
+updatePlayerXV keys player =
   let left  = isScancodePressed (view leftKey player) keys
       right = isScancodePressed (view rightKey player) keys
-  in  if left && right then 0
-      else if left then (-playerSpeed)
-      else if right then playerSpeed
-      else 0
+      v | left && right = 0
+        | left          = -playerSpeed
+        | right         = playerSpeed
+        | otherwise     = 0
+  in  set playerXV v player
 
-moveByVelocity :: Float -> Velocity -> Position -> Position
-moveByVelocity dt v p = p + v * dt
+moveStep :: Float -> (Position, Velocity) -> (Position, Velocity)
+moveStep dt (p, v) = (p + v * dt, v)
 
 bounded :: Ord a => a -> a -> a -> a
 bounded mini maxi a
@@ -40,31 +41,31 @@ bounded mini maxi a
 playerHPos :: HasTime t s => Wire s e m (Keys, Player) Player
 playerHPos = mkPure $ \ds (keys, player) ->
   let dt = realToFrac $ dtime ds
-      v = playerHSpeed keys player
       (minX, maxX) = view playerHBounds player
-      nextx = bounded minX maxX . moveByVelocity dt v
-  in  (Right (over playerX nextx player), playerHPos)
+      player' = over playerX (bounded minX maxX) .
+                over playerXFrame (moveStep dt) .
+                updatePlayerXV keys $ player
+  in  (Right player', playerHPos)
 
-gravitation = 2500
+gravity = 2500
 jumpVelocity = -1000
 
-applyGravitation :: HasTime t s => Wire s e m (Position, Velocity) (Position, Velocity)
-applyGravitation = mkPure $ \ds (p, v) ->
-  let dt = realToFrac $ dtime ds
-      nextv = v + gravitation * dt
-      nextp = p + (v + nextv) / 2 * dt -- trapezoidal rule
-  in (Right (nextp, nextv), applyGravitation)
+moveWithGravityStep :: Float -> Float -> (Position, Velocity) -> (Position, Velocity)
+moveWithGravityStep gravity dt (p, v) =
+  let (v', _) = moveStep dt (v, gravity)
+      p' = p + (v + v') / 2 * dt -- trapezoidal rule
+  in  (p', v')
 
-playerVPos :: (HasTime t s, Monoid e, Monad m) => Position -> Wire s e m (Keys, Player) Player
-playerVPos baseY = proc (keys, player) -> do
-  let canJump = view playerYV player == 0 && view playerY player >= baseY
+playerVPos :: HasTime t s => Position -> Wire s e m (Keys, Player) Player
+playerVPos baseY = mkPure $ \ds (keys, player) ->
+  let dt = realToFrac $ dtime ds
+      canJump = view playerYV player == 0 && view playerY player >= baseY
       wantJump = isScancodePressed (view upKey player) keys
       player' = if canJump && wantJump then set playerYV jumpVelocity player
                 else player
-  (nexty, nextyv) <- applyGravitation -< (view playerY player', view playerYV player')
-  let (nexty', nextyv') = if nexty >= baseY then (baseY, 0)
-                          else (nexty, nextyv)
-  returnA -< set playerY nexty' . set playerYV nextyv' $ player'
+      restrictToBase (p, v) = if p >= baseY then (baseY, 0) else (p, v)
+      player'' = over playerYFrame (restrictToBase . moveWithGravityStep gravity dt) player'
+  in (Right player'', playerVPos baseY)
 
 wrap :: Float -> Float -> Float -> Float
 wrap mini maxi p
@@ -73,9 +74,7 @@ wrap mini maxi p
   | otherwise = p
 
 moveCloudStep :: Float -> Float -> Cloud -> Cloud
-moveCloudStep w dt cloud =
-  let vel = view cloudXV cloud
-  in  over cloudX (wrap (-w/2) w . moveByVelocity dt vel) cloud
+moveCloudStep w dt = over cloudX (wrap (-w/2) w) . over cloudXFrame (moveStep dt)
 
 moveClouds :: HasTime t s => Float -> Wire s e m [Cloud] [Cloud]
 moveClouds w = mkPure $ \ds clouds ->
