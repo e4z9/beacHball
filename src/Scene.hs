@@ -8,6 +8,7 @@ import Paths_beacHball
 
 import Control.Arrow
 import Control.Lens
+import Data.Maybe
 import qualified SDL
 import System.Random
 
@@ -50,6 +51,8 @@ cloudXFrame = lens (view cloudX &&& view cloudXV)
                    (\c (p, v) -> (set cloudX p . set cloudXV v) c)
 
 data Ball = Ball {
+  _ballRandomGen :: StdGen,
+  _ballAV :: Float,
   _ballXV :: Float,
   _ballYV :: Float,
   _ballSprite :: Sprite
@@ -62,6 +65,13 @@ ballX = ballSprite . x
 ballY :: Lens' Ball Float
 ballY = ballSprite . y
 
+-- ball must have transformation
+ballA :: Lens' Ball Float
+ballA = lens (view transformAngle . fromJust . view (ballSprite . spriteTransform))
+             (\b a -> set (ballSprite . spriteTransform)
+                          (Just (set transformAngle a (fromJust $ view (ballSprite . spriteTransform) b)))
+                          b)
+
 ballXFrame :: Lens' Ball (Float, Float)
 ballXFrame = lens (view ballX &&& view ballXV)
                   (\c (p, v) -> (set ballX p . set ballXV v) c)
@@ -69,6 +79,15 @@ ballXFrame = lens (view ballX &&& view ballXV)
 ballYFrame :: Lens' Ball (Float, Float)
 ballYFrame = lens (view ballY &&& view ballYV)
                   (\c (p, v) -> (set ballY p . set ballYV v) c)
+
+ballAFrame :: Lens' Ball (Float, Float)
+ballAFrame = lens (view ballA &&& view ballAV)
+                  (\c (p, v) -> (set ballA p . set ballAV v) c)
+
+ballRandomR :: Random a => (a, a) -> Ball -> (a, Ball)
+ballRandomR range b =
+  let (a, g) = randomR range (view ballRandomGen b)
+  in  (a, set ballRandomGen g b)
 
 data GameScene = GameScene {
   _width :: Float,
@@ -120,14 +139,22 @@ createPlayer2 r width base = do
            set (playerSprite . spriteTransform) (Just $ SpriteTransform 0 (True, False))
            $ player
 
+setRandomAV :: Ball -> Ball
+setRandomAV b =
+  let (av, b') = ballRandomR (50, 300) b
+      av' = if view ballXV b' < 0 then -av else av
+  in  set ballAV av' b'
+
 createBall :: SDL.Renderer -> Float -> Float -> IO Ball
 createBall r width height = do
   sprite <- createSprite r =<< getDataFileName "ball.png"
+  rgen <- newStdGen
   xv <- randomRIO (-40, 40)
-  let ball = Ball (xv * 20) 0 sprite
+  let ball = Ball rgen 0 (xv * 20) 0 sprite
   return $ set ballX (width - width / 3) .
-           set ballY (height / 3)
-           $ ball
+           set ballY (height / 3) .
+           set (ballSprite . spriteTransform) (Just $ SpriteTransform 0 (False, False))
+           $ setRandomAV ball
 
 createSun :: SDL.Renderer -> Float -> IO Sprite
 createSun r w = do

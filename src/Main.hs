@@ -86,10 +86,10 @@ bounceWalls scene ball = bounceRight . bounceLeft $ ball
   where halfBall :: Float
         halfBall = fromIntegral (view (ballSprite . w) ball) / 2
         bounceLeft b = if view ballX b - halfBall > 0 then b
-                       else set ballX halfBall . over ballXV negate $ b
+                       else setRandomAV $ set ballX halfBall . over ballXV negate $ b
         sw = view width scene
         bounceRight b = if view ballX b + halfBall < sw  then b
-                       else set ballX (sw - halfBall) . over ballXV negate $ b
+                        else setRandomAV $ set ballX (sw - halfBall) . over ballXV negate $ b
 
 groundFactor = 2 / 3
 
@@ -99,7 +99,8 @@ bounceGround scene ball = if isBouncing then bounce ball else ball
     base = view baseY scene - fromIntegral (view (ballSprite . h) ball) / 2
     isBouncing = view ballY ball > base
     bounce = set ballY base . over ballYV (negate . (* groundFactor)) .
-             over ballXV (* groundFactor)
+             over ballXV (* groundFactor) .
+             over ballAV (* groundFactor)
 
 handleBallCollision :: GameScene -> Ball -> Ball
 handleBallCollision scene = bounceWalls scene . bounceGround scene
@@ -107,9 +108,11 @@ handleBallCollision scene = bounceWalls scene . bounceGround scene
 updateBall :: HasTime t s => Wire s e m GameScene GameScene
 updateBall = mkPure $ \ds scene ->
   let dt = realToFrac $ dtime ds
-      scene' = over ball (handleBallCollision scene) .
+      scene' = over (ball . ballAFrame) (moveStep dt) .
+               over ball (handleBallCollision scene) .
                over (ball . ballYFrame) (moveWithGravityStep (gravity/2) dt) .
-               over (ball . ballXFrame) (moveStep dt) $ scene
+               over (ball . ballXFrame) (moveStep dt)
+               $ scene
   in (Right scene', updateBall)
 
 logic :: (HasTime t s, Monad m) => GameScene -> Wire s () m (GameScene, [SDL.Event]) GameScene
