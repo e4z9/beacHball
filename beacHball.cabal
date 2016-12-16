@@ -14,7 +14,6 @@ cabal-version:       >=1.10
 
 data-dir:     data
 data-files:   potato_sml.png
-            , potato_sml2.png
             , background.png
             , ball.png
             , cloud1.png

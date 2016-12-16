@@ -108,7 +108,7 @@ createPlayer1 r width base = do
 
 createPlayer2 :: SDL.Renderer -> Float -> Float -> IO Player
 createPlayer2 r width base = do
-  sprite <- createSprite r =<< getDataFileName "potato_sml2.png"
+  sprite <- createSprite r =<< getDataFileName "potato_sml.png"
   let halfSpriteW = fromIntegral (view w sprite) / 2
       minX = width / 2 + halfSpriteW
       maxX = width - halfSpriteW
@@ -116,7 +116,8 @@ createPlayer2 r width base = do
                       (minX, maxX) 0 0 sprite
   return $ set playerX (width - width / 4) .
            set playerY base .
-           set (playerSprite . anchor) AnchorBottomMid
+           set (playerSprite . anchor) AnchorBottomMid .
+           set (playerSprite . spriteTransform) (Just $ SpriteTransform 0 (True, False))
            $ player
 
 createBall :: SDL.Renderer -> Float -> Float -> IO Ball
@@ -141,7 +142,7 @@ createBackground r w h = do
       tw = fromIntegral twi :: Float
       th = fromIntegral thi :: Float
       (sw, sh) = (round w, round (th * w / tw))
-  return $ Sprite tex AnchorBottomMid xp yp sw sh
+  return $ Sprite tex AnchorBottomMid xp yp sw sh Nothing
 
 createCloud :: SDL.Renderer -> Float -> Float -> FilePath -> IO Cloud
 createCloud r w h path = do

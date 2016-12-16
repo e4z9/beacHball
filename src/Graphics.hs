@@ -24,13 +24,20 @@ data Anchor =
   AnchorBottomMid |
   AnchorBottomRight
 
+data SpriteTransform = SpriteTransform {
+  _transformAngle :: Float,
+  _transformFlip :: (Bool, Bool)
+}
+makeLenses ''SpriteTransform
+
 data Sprite = Sprite {
   _texture :: SDL.Texture,
   _anchor :: Anchor,
   _x :: Float,
   _y :: Float,
   _w :: Int,
-  _h :: Int
+  _h :: Int,
+  _spriteTransform :: Maybe SpriteTransform
 }
 makeLenses ''Sprite
 
@@ -41,7 +48,7 @@ class Scene s where
 createSprite :: MonadIO m => SDL.Renderer -> FilePath -> m Sprite
 createSprite renderer texturePath = do
   (texture, w, h) <- loadTexture renderer texturePath
-  return $ Sprite texture AnchorCenter 0 0 w h
+  return $ Sprite texture AnchorCenter 0 0 w h Nothing
 
 spriteTopLeft :: Sprite -> (Float, Float)
 spriteTopLeft sprite =
@@ -84,7 +91,14 @@ renderSprite r sprite = do
       tex = view texture sprite
       wi = fromIntegral $ view w sprite
       hi = fromIntegral $ view h sprite
-  SDL.copy r tex Nothing $ Just $ SDL.Rectangle (SDL.P (SDL.V2 xi yi)) (SDL.V2 wi hi)
+      targetRect = Just $ SDL.Rectangle (SDL.P (SDL.V2 xi yi)) (SDL.V2 wi hi)
+      trans = view spriteTransform sprite
+  maybe
+    (SDL.copy r tex Nothing targetRect)
+    (\t -> SDL.copyEx r tex Nothing targetRect
+      (realToFrac $ view transformAngle t) Nothing
+      (uncurry SDL.V2 $ view transformFlip t))
+    trans
 
 render :: (MonadIO m, Scene s) => SDL.Renderer -> s -> m ()
 render r scene = do
