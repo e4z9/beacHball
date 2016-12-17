@@ -86,10 +86,10 @@ bounceWalls scene ball = bounceRight . bounceLeft $ ball
   where halfBall :: Float
         halfBall = fromIntegral (view (ballSprite . w) ball) / 2
         bounceLeft b = if view ballX b - halfBall > 0 then b
-                       else set ballX halfBall . set ballXV (negate $ view ballXV b) $ b
+                       else set ballX halfBall . over ballXV negate $ b
         sw = view width scene
         bounceRight b = if view ballX b + halfBall < sw  then b
-                       else set ballX (sw - halfBall) . set ballXV (negate $ view ballXV b) $ b
+                       else set ballX (sw - halfBall) . over ballXV negate $ b
 
 groundFactor = 2 / 3
 
@@ -98,9 +98,8 @@ bounceGround scene ball = if isBouncing then bounce ball else ball
   where
     base = view baseY scene - fromIntegral (view (ballSprite . h) ball) / 2
     isBouncing = view ballY ball > base
-    bounce b = set ballY base . set ballYV (negate $ view ballYV b * groundFactor) .
-               set ballXV (view ballXV b * groundFactor)
-               $ b
+    bounce = set ballY base . over ballYV (negate . (* groundFactor)) .
+             over ballXV (* groundFactor)
 
 handleBallCollision :: GameScene -> Ball -> Ball
 handleBallCollision scene = bounceWalls scene . bounceGround scene
