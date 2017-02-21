@@ -5,6 +5,7 @@ module Main where
 
 import Graphics
 import Input
+import Physics
 import Scene
 
 import Control.Lens
@@ -27,7 +28,7 @@ updatePlayerXV keys player =
         | left          = -playerSpeed
         | right         = playerSpeed
         | otherwise     = 0
-  in  set playerXV v player
+  in  set xVel v player
 
 moveStep :: Float -> (Position, Velocity) -> (Position, Velocity)
 moveStep dt (p, v) = (p + v * dt, v)
@@ -43,7 +44,7 @@ playerHPos = mkPure $ \ds (keys, player) ->
   let dt = realToFrac $ dtime ds
       (minX, maxX) = view playerHBounds player
       player' = over xPos (bounded minX maxX) .
-                over playerXFrame (moveStep dt) .
+                over xFrame (moveStep dt) .
                 updatePlayerXV keys $ player
   in  (Right player', playerHPos)
 
@@ -59,12 +60,12 @@ moveWithGravityStep gravity dt (p, v) =
 playerVPos :: HasTime t s => Position -> Wire s e m (Keys, Player) Player
 playerVPos baseY = mkPure $ \ds (keys, player) ->
   let dt = realToFrac $ dtime ds
-      canJump = view playerYV player == 0 && view yPos player >= baseY
+      canJump = view yVel player == 0 && view yPos player >= baseY
       wantJump = isScancodePressed (view upKey player) keys
-      player' = if canJump && wantJump then set playerYV jumpVelocity player
+      player' = if canJump && wantJump then set yVel jumpVelocity player
                 else player
       restrictToBase (p, v) = if p >= baseY then (baseY, 0) else (p, v)
-      player'' = over playerYFrame (restrictToBase . moveWithGravityStep gravity dt) player'
+      player'' = over yFrame (restrictToBase . moveWithGravityStep gravity dt) player'
   in (Right player'', playerVPos baseY)
 
 wrap :: Float -> Float -> Float -> Float
@@ -74,7 +75,7 @@ wrap mini maxi p
   | otherwise = p
 
 moveCloudStep :: Float -> Float -> Cloud -> Cloud
-moveCloudStep w dt = over xPos (wrap (-w/2) w) . over cloudXFrame (moveStep dt)
+moveCloudStep w dt = over xPos (wrap (-w/2) w) . over xFrame (moveStep dt)
 
 moveClouds :: HasTime t s => Float -> Wire s e m [Cloud] [Cloud]
 moveClouds w = mkPure $ \ds clouds ->
@@ -86,10 +87,10 @@ bounceWalls scene ball = bounceRight . bounceLeft $ ball
   where halfBall :: Float
         halfBall = fromIntegral (view (ballSprite . w) ball) / 2
         bounceLeft b = if view xPos b - halfBall > 0 then b
-                       else setRandomAV $ set xPos halfBall . over ballXV negate $ b
+                       else setRandomAV $ set xPos halfBall . over xVel negate $ b
         sw = view width scene
         bounceRight b = if view xPos b + halfBall < sw  then b
-                        else setRandomAV $ set xPos (sw - halfBall) . over ballXV negate $ b
+                        else setRandomAV $ set xPos (sw - halfBall) . over xVel negate $ b
 
 groundCoefficient = 2 / 3
 
@@ -98,8 +99,8 @@ bounceGround scene ball = if isBouncing then bounce ball else ball
   where
     base = view baseY scene - fromIntegral (view (ballSprite . h) ball) / 2
     isBouncing = view yPos ball > base
-    bounce = set yPos base . over ballYV (negate . (* groundCoefficient)) .
-             over ballXV (* groundCoefficient) .
+    bounce = set yPos base . over yVel (negate . (* groundCoefficient)) .
+             over xVel (* groundCoefficient) .
              over ballAV (* groundCoefficient)
 
 playerCoefficient = 1 / 5
@@ -130,10 +131,10 @@ bouncePlayer player ball = if isBouncing then bounce ball else ball
     -- tangent
     (tx, ty) = (-ny, nx)
     -- ball velocity
-    (bxv, byv) = (view ballXV ball, view ballYV ball)
+    (bxv, byv) = (view xVel ball, view yVel ball)
     (bnv, btv) = (bxv * nx + byv * ny, bxv * tx + byv * ty) -- dot products
     -- player velocity
-    (pxv, pyv) = (view playerXV player, view playerYV player)
+    (pxv, pyv) = (view xVel player, view yVel player)
     pnv = pxv * nx + pyv * ny
     -- if near enough, and ball moves in direction of player:
     isBouncing = sqrDist < rsum*rsum - 0.001
@@ -142,8 +143,8 @@ bouncePlayer player ball = if isBouncing then bounce ball else ball
     -- move ball to outside of player
     -- TODO calculation assumes AnchorCenter for the ball
     (bx', by') = (px + rsum * nx, py + rsum * ny)
-    bounce = set ballXV (bnv' * nx + btv * tx) .
-             set ballYV (bnv' * ny + btv * ty) .
+    bounce = set xVel (bnv' * nx + btv * tx) .
+             set yVel (bnv' * ny + btv * ty) .
              set xPos bx' .
              set yPos by'
 
@@ -160,8 +161,8 @@ updateBall = mkPure $ \ds scene ->
   let dt = realToFrac $ dtime ds
       scene' = over (ball . ballAFrame) (moveStep dt) .
                over ball (handleBallCollision scene) .
-               over (ball . ballYFrame) (moveWithGravityStep (gravity/2) dt) .
-               over (ball . ballXFrame) (moveStep dt)
+               over (ball . yFrame) (moveWithGravityStep (gravity/2) dt) .
+               over (ball . xFrame) (moveStep dt)
                $ scene
   in (Right scene', updateBall)
 

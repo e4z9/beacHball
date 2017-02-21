@@ -3,6 +3,7 @@
 module Scene where
 
 import Graphics
+import Physics
 
 import Paths_beacHball
 
@@ -27,13 +28,9 @@ instance Located Player where
   xPos = playerSprite . x
   yPos = playerSprite . y
 
-playerXFrame :: Lens' Player (Float, Float)
-playerXFrame = lens (view xPos &&& view playerXV)
-                    (\pl (p, v) -> (set xPos p . set playerXV v) pl)
-
-playerYFrame :: Lens' Player (Float, Float)
-playerYFrame = lens (view yPos &&& view playerYV)
-                    (\pl (p, v) -> (set yPos p . set playerYV v) pl)
+instance Moving Player where
+  xVel = playerXV
+  yVel = playerYV
 
 -- Circle with radius = width and located at top of sprite
 collisionCircle :: Sprite -> ((Float, Float), Float) -- ((x, y), r)
@@ -44,6 +41,7 @@ collisionCircle s =
 
 data Cloud = Cloud {
   _cloudXV :: Float,
+  _cloudYV :: Float,
   _cloudSprite :: Sprite
 }
 makeLenses ''Cloud
@@ -52,9 +50,9 @@ instance Located Cloud where
   xPos = cloudSprite . x
   yPos = cloudSprite . y
 
-cloudXFrame :: Lens' Cloud (Float, Float)
-cloudXFrame = lens (view xPos &&& view cloudXV)
-                   (\c (p, v) -> (set xPos p . set cloudXV v) c)
+instance Moving Cloud where
+  xVel = cloudXV
+  yVel = cloudYV
 
 data Ball = Ball {
   _ballRandomGen :: StdGen,
@@ -69,6 +67,10 @@ instance Located Ball where
   xPos = ballSprite . x
   yPos = ballSprite . y
 
+instance Moving Ball where
+  xVel = ballXV
+  yVel = ballYV
+
 -- ball must have transformation
 ballA :: Lens' Ball Float
 ballA = lens (view transformAngle . fromJust . view (ballSprite . spriteTransform))
@@ -76,17 +78,8 @@ ballA = lens (view transformAngle . fromJust . view (ballSprite . spriteTransfor
                           (Just (set transformAngle a (fromJust $ view (ballSprite . spriteTransform) b)))
                           b)
 
-ballXFrame :: Lens' Ball (Float, Float)
-ballXFrame = lens (view xPos &&& view ballXV)
-                  (\c (p, v) -> (set xPos p . set ballXV v) c)
-
-ballYFrame :: Lens' Ball (Float, Float)
-ballYFrame = lens (view yPos &&& view ballYV)
-                  (\c (p, v) -> (set yPos p . set ballYV v) c)
-
 ballAFrame :: Lens' Ball (Float, Float)
-ballAFrame = lens (view ballA &&& view ballAV)
-                  (\c (p, v) -> (set ballA p . set ballAV v) c)
+ballAFrame = frame ballA ballAV
 
 ballRandomR :: Random a => (a, a) -> Ball -> (a, Ball)
 ballRandomR range b =
@@ -146,7 +139,7 @@ createPlayer2 r width base = do
 setRandomAV :: Ball -> Ball
 setRandomAV b =
   let (av, b') = ballRandomR (50, 300) b
-      av' = if view ballXV b' < 0 then -av else av
+      av' = if view xVel b' < 0 then -av else av
   in  set ballAV av' b'
 
 createBall :: SDL.Renderer -> Float -> Float -> IO Ball
@@ -181,7 +174,7 @@ createCloud r w h path = do
   xp <- randomRIO (- w / 2, w)
   yp <- randomRIO (0, h / 4)
   v <- randomRIO (2, 40)
-  return $ Cloud v $ set x xp . set y yp . set anchor AnchorTopLeft $ sprite
+  return $ Cloud v 0 $ set x xp . set y yp . set anchor AnchorTopLeft $ sprite
 
 createClouds :: SDL.Renderer -> Float -> Float -> IO [Cloud]
 createClouds r w h = do

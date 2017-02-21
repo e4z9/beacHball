@@ -38,6 +38,7 @@ executable beacHball
   other-modules:       Paths_beacHball
                      , Graphics
                      , Input
+                     , Physics
                      , Scene
   default-language:    Haskell2010
   build-depends:       base >= 4.7 && < 5
