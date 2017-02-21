@@ -37,6 +37,13 @@ playerYFrame :: Lens' Player (Float, Float)
 playerYFrame = lens (view playerY &&& view playerYV)
                     (\pl (p, v) -> (set playerY p . set playerYV v) pl)
 
+-- Circle with radius = width and located at top of sprite
+collisionCircle :: Sprite -> ((Float, Float), Float) -- ((x, y), r)
+collisionCircle s =
+  let r = fromIntegral (view w s) / 2
+      (sx, sy) = spriteTopLeft s
+  in ((sx + r, sy + r), r)
+
 data Cloud = Cloud {
   _cloudXV :: Float,
   _cloudSprite :: Sprite
