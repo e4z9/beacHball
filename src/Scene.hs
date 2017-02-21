@@ -23,19 +23,17 @@ data Player = Player {
 }
 makeLenses ''Player
 
-playerX :: Lens' Player Float
-playerX = playerSprite . x
-
-playerY :: Lens' Player Float
-playerY = playerSprite . y
+instance Located Player where
+  xPos = playerSprite . x
+  yPos = playerSprite . y
 
 playerXFrame :: Lens' Player (Float, Float)
-playerXFrame = lens (view playerX &&& view playerXV)
-                    (\pl (p, v) -> (set playerX p . set playerXV v) pl)
+playerXFrame = lens (view xPos &&& view playerXV)
+                    (\pl (p, v) -> (set xPos p . set playerXV v) pl)
 
 playerYFrame :: Lens' Player (Float, Float)
-playerYFrame = lens (view playerY &&& view playerYV)
-                    (\pl (p, v) -> (set playerY p . set playerYV v) pl)
+playerYFrame = lens (view yPos &&& view playerYV)
+                    (\pl (p, v) -> (set yPos p . set playerYV v) pl)
 
 -- Circle with radius = width and located at top of sprite
 collisionCircle :: Sprite -> ((Float, Float), Float) -- ((x, y), r)
@@ -50,12 +48,13 @@ data Cloud = Cloud {
 }
 makeLenses ''Cloud
 
-cloudX :: Lens' Cloud Float
-cloudX = cloudSprite . x
+instance Located Cloud where
+  xPos = cloudSprite . x
+  yPos = cloudSprite . y
 
 cloudXFrame :: Lens' Cloud (Float, Float)
-cloudXFrame = lens (view cloudX &&& view cloudXV)
-                   (\c (p, v) -> (set cloudX p . set cloudXV v) c)
+cloudXFrame = lens (view xPos &&& view cloudXV)
+                   (\c (p, v) -> (set xPos p . set cloudXV v) c)
 
 data Ball = Ball {
   _ballRandomGen :: StdGen,
@@ -66,11 +65,9 @@ data Ball = Ball {
 }
 makeLenses ''Ball
 
-ballX :: Lens' Ball Float
-ballX = ballSprite . x
-
-ballY :: Lens' Ball Float
-ballY = ballSprite . y
+instance Located Ball where
+  xPos = ballSprite . x
+  yPos = ballSprite . y
 
 -- ball must have transformation
 ballA :: Lens' Ball Float
@@ -80,12 +77,12 @@ ballA = lens (view transformAngle . fromJust . view (ballSprite . spriteTransfor
                           b)
 
 ballXFrame :: Lens' Ball (Float, Float)
-ballXFrame = lens (view ballX &&& view ballXV)
-                  (\c (p, v) -> (set ballX p . set ballXV v) c)
+ballXFrame = lens (view xPos &&& view ballXV)
+                  (\c (p, v) -> (set xPos p . set ballXV v) c)
 
 ballYFrame :: Lens' Ball (Float, Float)
-ballYFrame = lens (view ballY &&& view ballYV)
-                  (\c (p, v) -> (set ballY p . set ballYV v) c)
+ballYFrame = lens (view yPos &&& view ballYV)
+                  (\c (p, v) -> (set yPos p . set ballYV v) c)
 
 ballAFrame :: Lens' Ball (Float, Float)
 ballAFrame = lens (view ballA &&& view ballAV)
@@ -127,8 +124,8 @@ createPlayer1 r width base = do
       maxX = width / 2 - halfSpriteW
       player = Player SDL.ScancodeA SDL.ScancodeD SDL.ScancodeW
                       (minX, maxX) 0 0 sprite
-  return $ set playerX (width / 4) .
-           set playerY base .
+  return $ set xPos (width / 4) .
+           set yPos base .
            set (playerSprite . anchor) AnchorBottomMid
            $ player
 
@@ -140,8 +137,8 @@ createPlayer2 r width base = do
       maxX = width - halfSpriteW
       player = Player SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp
                       (minX, maxX) 0 0 sprite
-  return $ set playerX (width - width / 4) .
-           set playerY base .
+  return $ set xPos (width - width / 4) .
+           set yPos base .
            set (playerSprite . anchor) AnchorBottomMid .
            set (playerSprite . spriteTransform) (Just $ SpriteTransform 0 (True, False))
            $ player
@@ -158,8 +155,8 @@ createBall r width height = do
   rgen <- newStdGen
   xv <- randomRIO (-40, 40)
   let ball = Ball rgen 0 (xv * 20) 0 sprite
-  return $ set ballX (width - width / 3) .
-           set ballY (height / 3) .
+  return $ set xPos (width - width / 3) .
+           set yPos (height / 3) .
            set (ballSprite . spriteTransform) (Just $ SpriteTransform 0 (False, False))
            $ setRandomAV ball
 

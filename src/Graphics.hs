@@ -24,6 +24,10 @@ data Anchor =
   AnchorBottomMid |
   AnchorBottomRight
 
+class Located p where
+  xPos :: Lens' p Float
+  yPos :: Lens' p Float
+
 data SpriteTransform = SpriteTransform {
   _transformAngle :: Float,
   _transformFlip :: (Bool, Bool)
@@ -40,6 +44,10 @@ data Sprite = Sprite {
   _spriteTransform :: Maybe SpriteTransform
 }
 makeLenses ''Sprite
+
+instance Located Sprite where
+  xPos = x
+  yPos = y
 
 class Scene s where
   renderScene :: MonadIO m => s -> (Sprite -> m ()) -> m ()

@@ -42,7 +42,7 @@ playerHPos :: HasTime t s => Wire s e m (Keys, Player) Player
 playerHPos = mkPure $ \ds (keys, player) ->
   let dt = realToFrac $ dtime ds
       (minX, maxX) = view playerHBounds player
-      player' = over playerX (bounded minX maxX) .
+      player' = over xPos (bounded minX maxX) .
                 over playerXFrame (moveStep dt) .
                 updatePlayerXV keys $ player
   in  (Right player', playerHPos)
@@ -59,7 +59,7 @@ moveWithGravityStep gravity dt (p, v) =
 playerVPos :: HasTime t s => Position -> Wire s e m (Keys, Player) Player
 playerVPos baseY = mkPure $ \ds (keys, player) ->
   let dt = realToFrac $ dtime ds
-      canJump = view playerYV player == 0 && view playerY player >= baseY
+      canJump = view playerYV player == 0 && view yPos player >= baseY
       wantJump = isScancodePressed (view upKey player) keys
       player' = if canJump && wantJump then set playerYV jumpVelocity player
                 else player
@@ -74,7 +74,7 @@ wrap mini maxi p
   | otherwise = p
 
 moveCloudStep :: Float -> Float -> Cloud -> Cloud
-moveCloudStep w dt = over cloudX (wrap (-w/2) w) . over cloudXFrame (moveStep dt)
+moveCloudStep w dt = over xPos (wrap (-w/2) w) . over cloudXFrame (moveStep dt)
 
 moveClouds :: HasTime t s => Float -> Wire s e m [Cloud] [Cloud]
 moveClouds w = mkPure $ \ds clouds ->
@@ -85,11 +85,11 @@ bounceWalls :: GameScene -> Ball -> Ball
 bounceWalls scene ball = bounceRight . bounceLeft $ ball
   where halfBall :: Float
         halfBall = fromIntegral (view (ballSprite . w) ball) / 2
-        bounceLeft b = if view ballX b - halfBall > 0 then b
-                       else setRandomAV $ set ballX halfBall . over ballXV negate $ b
+        bounceLeft b = if view xPos b - halfBall > 0 then b
+                       else setRandomAV $ set xPos halfBall . over ballXV negate $ b
         sw = view width scene
-        bounceRight b = if view ballX b + halfBall < sw  then b
-                        else setRandomAV $ set ballX (sw - halfBall) . over ballXV negate $ b
+        bounceRight b = if view xPos b + halfBall < sw  then b
+                        else setRandomAV $ set xPos (sw - halfBall) . over ballXV negate $ b
 
 groundCoefficient = 2 / 3
 
@@ -97,8 +97,8 @@ bounceGround :: GameScene -> Ball -> Ball
 bounceGround scene ball = if isBouncing then bounce ball else ball
   where
     base = view baseY scene - fromIntegral (view (ballSprite . h) ball) / 2
-    isBouncing = view ballY ball > base
-    bounce = set ballY base . over ballYV (negate . (* groundCoefficient)) .
+    isBouncing = view yPos ball > base
+    bounce = set yPos base . over ballYV (negate . (* groundCoefficient)) .
              over ballXV (* groundCoefficient) .
              over ballAV (* groundCoefficient)
 
@@ -144,8 +144,8 @@ bouncePlayer player ball = if isBouncing then bounce ball else ball
     (bx', by') = (px + rsum * nx, py + rsum * ny)
     bounce = set ballXV (bnv' * nx + btv * tx) .
              set ballYV (bnv' * ny + btv * ty) .
-             set ballX bx' .
-             set ballY by'
+             set xPos bx' .
+             set yPos by'
 
 bouncePlayers :: GameScene -> Ball -> Ball
 bouncePlayers scene = bouncePlayer (view player1 scene) .
