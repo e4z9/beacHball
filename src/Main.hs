@@ -39,15 +39,6 @@ bounded mini maxi a
   | maxi <= a = maxi
   | otherwise = a
 
-playerHPos :: HasTime t s => Wire s e m (Keys, Player) Player
-playerHPos = mkPure $ \ds (keys, player) ->
-  let dt = realToFrac $ dtime ds
-      (minX, maxX) = view playerHBounds player
-      player' = over xPos (bounded minX maxX) .
-                over xFrame (moveStep dt) .
-                updatePlayerXV keys $ player
-  in  (Right player', playerHPos)
-
 gravity = 2500
 jumpVelocity = -1000
 
@@ -57,16 +48,30 @@ moveWithGravityStep gravity dt (p, v) =
       p' = p + (v + v') / 2 * dt -- trapezoidal rule
   in  (p', v')
 
-playerVPos :: HasTime t s => Position -> Wire s e m (Keys, Player) Player
-playerVPos baseY = mkPure $ \ds (keys, player) ->
+moveWithGravity :: (HasTime t s, Moving o) => Wire s e m o o
+moveWithGravity = mkPure $ \ds o ->
   let dt = realToFrac $ dtime ds
-      canJump = view yVel player == 0 && view yPos player >= baseY
+      o' = over xFrame (moveStep dt) .
+           over yFrame (moveWithGravityStep gravity dt) $ o
+  in (Right o', moveWithGravity)
+
+updatePlayerYV :: Position -> Keys -> Player -> Player
+updatePlayerYV baseY keys player =
+  let canJump = view yVel player == 0 && view yPos player >= baseY
       wantJump = isScancodePressed (view upKey player) keys
       player' = if canJump && wantJump then set yVel jumpVelocity player
                 else player
+  in player'
+
+updatePlayerV :: Float -> Keys -> Player -> Player
+updatePlayerV baseY keys = updatePlayerXV keys . updatePlayerYV baseY keys
+
+restrictPlayerPos :: Position -> Player -> Player
+restrictPlayerPos baseY player =
+  let (minX, maxX) = view playerHBounds player
       restrictToBase (p, v) = if p >= baseY then (baseY, 0) else (p, v)
-      player'' = over yFrame (restrictToBase . moveWithGravityStep gravity dt) player'
-  in (Right player'', playerVPos baseY)
+  in over xPos (bounded minX maxX) .
+     over yFrame restrictToBase $ player
 
 wrap :: Float -> Float -> Float -> Float
 wrap mini maxi p
@@ -170,14 +175,16 @@ logic :: (HasTime t s, Monad m) => GameScene -> Wire s () m (GameScene, [SDL.Eve
 logic startScene = proc (scene, events) -> do
   untilQuitOrClose -< events
   keys <- handleKeyEvents -< events
-  p1 <- playerHPos -< (keys, view player1 scene)
-  p1' <- playerVPos (view baseY startScene) -< (keys, p1)
-  p2 <- playerHPos -< (keys, view player2 scene)
-  p2' <- playerVPos (view baseY startScene) -< (keys, p2)
+  let p1 = updatePlayerV (view baseY startScene) keys (view player1 scene)
+  p1' <- moveWithGravity -< p1
+  let p1'' = restrictPlayerPos (view baseY startScene) p1'
+  let p2 = updatePlayerV (view baseY startScene) keys (view player2 scene)
+  p2' <- moveWithGravity -< p2
+  let p2'' = restrictPlayerPos (view baseY startScene) p2'
   clouds' <- moveClouds (view width startScene) -< view clouds scene
   scene' <- updateBall -< scene
-  returnA -< set player2 p2' .
-             set player1 p1' .
+  returnA -< set player2 p2'' .
+             set player1 p1'' .
              set clouds clouds'
              $ scene'
 
