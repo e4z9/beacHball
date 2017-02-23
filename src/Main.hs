@@ -145,13 +145,13 @@ bouncePlayer player ball = if isBouncing then bounce ball else ball
     isBouncing = sqrDist < rsum*rsum - 0.001
     -- new ball velocity in normal direction
     bnv' = pnv - (bnv - pnv)*playerCoefficient
-    -- move ball to outside of player
-    -- TODO calculation assumes AnchorCenter for the ball
-    (bx', by') = (px + rsum * nx, py + rsum * ny)
+    -- move ball to outside of player along normal
+    correctionDistance = rsum - d
+    (dx, dy) = (correctionDistance * nx, correctionDistance * ny)
     bounce = set xVel (bnv' * nx + btv * tx) .
              set yVel (bnv' * ny + btv * ty) .
-             set xPos bx' .
-             set yPos by'
+             over xPos (+dx) .
+             over yPos (+dy)
 
 bouncePlayers :: GameScene -> Ball -> Ball
 bouncePlayers scene = bouncePlayer (view player1 scene) .
