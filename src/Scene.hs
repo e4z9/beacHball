@@ -13,6 +13,8 @@ import Data.Maybe
 import qualified SDL
 import System.Random
 
+sceneGravity = 2500
+
 data Player = Player {
   _leftKey :: SDL.Scancode,
   _rightKey :: SDL.Scancode,
@@ -31,6 +33,7 @@ instance Located Player where
 instance Moving Player where
   xVel = playerXV
   yVel = playerYV
+  gravity = const sceneGravity
 
 -- Circle with radius = width and located at top of sprite
 collisionCircle :: Sprite -> ((Float, Float), Float) -- ((x, y), r)
@@ -70,6 +73,7 @@ instance Located Ball where
 instance Moving Ball where
   xVel = ballXV
   yVel = ballYV
+  gravity = const (sceneGravity / 2)
 
 -- ball must have transformation
 ballA :: Lens' Ball Float

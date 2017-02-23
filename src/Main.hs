@@ -33,13 +33,12 @@ bounded mini maxi a
   | maxi <= a = maxi
   | otherwise = a
 
-gravity = 2500
 jumpVelocity = -1000
 
 moveWithGravity :: (HasTime t s, Moving o) => Wire s e m o o
 moveWithGravity = mkPure $ \ds o ->
   let dt = realToFrac $ dtime ds
-  in (Right (moveWithGravityStep gravity dt o), moveWithGravity)
+  in (Right (moveWithGravityStep dt o), moveWithGravity)
 
 updatePlayerYV :: Position -> Keys -> Player -> Player
 updatePlayerYV baseY keys player =
@@ -66,7 +65,7 @@ wrap mini maxi p
   | otherwise = p
 
 moveCloudStep :: Float -> Float -> Cloud -> Cloud
-moveCloudStep w dt = over xPos (wrap (-w/2) w) . moveWithGravityStep 0 dt
+moveCloudStep w dt = over xPos (wrap (-w/2) w) . moveWithGravityStep dt
 
 moveClouds :: HasTime t s => Float -> Wire s e m [Cloud] [Cloud]
 moveClouds w = mkPure $ \ds clouds ->
@@ -152,7 +151,7 @@ updateBall = mkPure $ \ds scene ->
   let dt = realToFrac $ dtime ds
       scene' = over (ball . ballAFrame) (moveFrame dt) .
                over ball (handleBallCollision scene) .
-               over ball (moveWithGravityStep (gravity/2) dt)
+               over ball (moveWithGravityStep dt)
                $ scene
   in (Right scene', updateBall)
 
