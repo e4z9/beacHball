@@ -20,3 +20,17 @@ class Located m => Moving m where
   xFrame = frame xPos xVel
   yFrame :: Lens' m (Position, Velocity)
   yFrame = frame yPos yVel
+
+moveFrame :: Float -> (Position, Velocity) -> (Position, Velocity)
+moveFrame dt (p, v) = (p + v * dt, v)
+
+moveFrameWithGravity :: Float -> Float -> (Position, Velocity) -> (Position, Velocity)
+moveFrameWithGravity gravity dt (p, v) =
+  let (v', _) = moveFrame dt (v, gravity)
+      p' = p + (v + v') / 2 * dt -- trapezoidal rule
+  in  (p', v')
+
+moveWithGravityStep :: Moving o => Float -> Float -> o -> o
+moveWithGravityStep gravity dt =
+  over xFrame (moveFrame dt) .
+  over yFrame (moveFrameWithGravity gravity dt)

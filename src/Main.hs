@@ -27,9 +27,6 @@ updatePlayerXV keys player =
         | otherwise     = 0
   in  set xVel v player
 
-moveFrame :: Float -> (Position, Velocity) -> (Position, Velocity)
-moveFrame dt (p, v) = (p + v * dt, v)
-
 bounded :: Ord a => a -> a -> a -> a
 bounded mini maxi a
   | a <= mini = mini
@@ -38,17 +35,6 @@ bounded mini maxi a
 
 gravity = 2500
 jumpVelocity = -1000
-
-moveFrameWithGravity :: Float -> Float -> (Position, Velocity) -> (Position, Velocity)
-moveFrameWithGravity gravity dt (p, v) =
-  let (v', _) = moveFrame dt (v, gravity)
-      p' = p + (v + v') / 2 * dt -- trapezoidal rule
-  in  (p', v')
-
-moveWithGravityStep :: Moving o => Float -> Float -> o -> o
-moveWithGravityStep gravity dt =
-  over xFrame (moveFrame dt) .
-  over yFrame (moveFrameWithGravity gravity dt)
 
 moveWithGravity :: (HasTime t s, Moving o) => Wire s e m o o
 moveWithGravity = mkPure $ \ds o ->
