@@ -30,8 +30,8 @@ updatePlayerXV keys player =
         | otherwise     = 0
   in  set xVel v player
 
-moveStep :: Float -> (Position, Velocity) -> (Position, Velocity)
-moveStep dt (p, v) = (p + v * dt, v)
+moveFrame :: Float -> (Position, Velocity) -> (Position, Velocity)
+moveFrame dt (p, v) = (p + v * dt, v)
 
 bounded :: Ord a => a -> a -> a -> a
 bounded mini maxi a
@@ -42,18 +42,21 @@ bounded mini maxi a
 gravity = 2500
 jumpVelocity = -1000
 
-moveWithGravityStep :: Float -> Float -> (Position, Velocity) -> (Position, Velocity)
-moveWithGravityStep gravity dt (p, v) =
-  let (v', _) = moveStep dt (v, gravity)
+moveFrameWithGravity :: Float -> Float -> (Position, Velocity) -> (Position, Velocity)
+moveFrameWithGravity gravity dt (p, v) =
+  let (v', _) = moveFrame dt (v, gravity)
       p' = p + (v + v') / 2 * dt -- trapezoidal rule
   in  (p', v')
+
+moveWithGravityStep :: Moving o => Float -> Float -> o -> o
+moveWithGravityStep gravity dt =
+  over xFrame (moveFrame dt) .
+  over yFrame (moveFrameWithGravity gravity dt)
 
 moveWithGravity :: (HasTime t s, Moving o) => Wire s e m o o
 moveWithGravity = mkPure $ \ds o ->
   let dt = realToFrac $ dtime ds
-      o' = over xFrame (moveStep dt) .
-           over yFrame (moveWithGravityStep gravity dt) $ o
-  in (Right o', moveWithGravity)
+  in (Right (moveWithGravityStep gravity dt o), moveWithGravity)
 
 updatePlayerYV :: Position -> Keys -> Player -> Player
 updatePlayerYV baseY keys player =
@@ -80,7 +83,7 @@ wrap mini maxi p
   | otherwise = p
 
 moveCloudStep :: Float -> Float -> Cloud -> Cloud
-moveCloudStep w dt = over xPos (wrap (-w/2) w) . over xFrame (moveStep dt)
+moveCloudStep w dt = over xPos (wrap (-w/2) w) . moveWithGravityStep 0 dt
 
 moveClouds :: HasTime t s => Float -> Wire s e m [Cloud] [Cloud]
 moveClouds w = mkPure $ \ds clouds ->
@@ -164,10 +167,9 @@ handleBallCollision scene = bounceWalls scene . bounceGround scene .
 updateBall :: HasTime t s => Wire s e m GameScene GameScene
 updateBall = mkPure $ \ds scene ->
   let dt = realToFrac $ dtime ds
-      scene' = over (ball . ballAFrame) (moveStep dt) .
+      scene' = over (ball . ballAFrame) (moveFrame dt) .
                over ball (handleBallCollision scene) .
-               over (ball . yFrame) (moveWithGravityStep (gravity/2) dt) .
-               over (ball . xFrame) (moveStep dt)
+               over ball (moveWithGravityStep (gravity/2) dt)
                $ scene
   in (Right scene', updateBall)
 
