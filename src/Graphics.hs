@@ -24,9 +24,11 @@ data Anchor =
   AnchorBottomMid |
   AnchorBottomRight
 
+type Position = Float
+
 class Located p where
-  xPos :: Lens' p Float
-  yPos :: Lens' p Float
+  xPos :: Lens' p Position
+  yPos :: Lens' p Position
 
 data SpriteTransform = SpriteTransform {
   _transformAngle :: Float,
@@ -37,8 +39,8 @@ makeLenses ''SpriteTransform
 data Sprite = Sprite {
   _texture :: SDL.Texture,
   _anchor :: Anchor,
-  _x :: Float,
-  _y :: Float,
+  _x :: Position,
+  _y :: Position,
   _w :: Int,
   _h :: Int,
   _spriteTransform :: Maybe SpriteTransform
@@ -58,7 +60,7 @@ createSprite renderer texturePath = do
   (texture, w, h) <- loadTexture renderer texturePath
   return $ Sprite texture AnchorCenter 0 0 w h Nothing
 
-spriteTopLeft :: Sprite -> (Float, Float)
+spriteTopLeft :: Sprite -> (Position, Position)
 spriteTopLeft sprite =
   let xs = view x sprite
       ys = view y sprite

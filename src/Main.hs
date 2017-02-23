@@ -14,9 +14,6 @@ import FRP.Netwire
 import qualified SDL
 import Prelude hiding ((.))
 
-type Velocity = Float
-type Position = Float
-
 playerSpeed :: Velocity
 playerSpeed = 200
 
