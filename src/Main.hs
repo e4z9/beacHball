@@ -35,10 +35,10 @@ bounded mini maxi a
 
 jumpVelocity = -1000
 
-moveWithGravity :: (HasTime t s, Moving o) => Wire s e m o o
-moveWithGravity = mkPure $ \ds o ->
+moveWithGravity :: (HasTime t s, Moving o, Functor f) => Wire s e m (f o) (f o)
+moveWithGravity = mkPure $ \ds os ->
   let dt = realToFrac $ dtime ds
-  in (Right (moveWithGravityStep dt o), moveWithGravity)
+  in  (Right $ fmap (moveWithGravityStep dt) os, moveWithGravity)
 
 updatePlayerYV :: Position -> Keys -> Player -> Player
 updatePlayerYV baseY keys player =
@@ -47,9 +47,6 @@ updatePlayerYV baseY keys player =
       player' = if canJump && wantJump then set yVel jumpVelocity player
                 else player
   in player'
-
-updatePlayerV :: Float -> Keys -> Player -> Player
-updatePlayerV baseY keys = updatePlayerXV keys . updatePlayerYV baseY keys
 
 restrictPlayerPos :: Position -> Player -> Player
 restrictPlayerPos baseY player =
@@ -63,14 +60,6 @@ wrap mini maxi p
   | p > maxi  = mini + p - maxi
   | p < mini  = maxi - (mini - p)
   | otherwise = p
-
-moveCloudStep :: Float -> Float -> Cloud -> Cloud
-moveCloudStep w dt = over xPos (wrap (-w/2) w) . moveWithGravityStep dt
-
-moveClouds :: HasTime t s => Float -> Wire s e m [Cloud] [Cloud]
-moveClouds w = mkPure $ \ds clouds ->
-  let dt = realToFrac $ dtime ds
-  in  (Right $ map (moveCloudStep w dt) clouds, moveClouds w)
 
 bounceWalls :: GameScene -> Ball -> Ball
 bounceWalls scene ball = bounceRight . bounceLeft $ ball
@@ -150,27 +139,34 @@ updateBall :: HasTime t s => Wire s e m GameScene GameScene
 updateBall = mkPure $ \ds scene ->
   let dt = realToFrac $ dtime ds
       scene' = over (ball . ballAFrame) (moveFrame dt) .
-               over ball (handleBallCollision scene) .
-               over ball (moveWithGravityStep dt)
+               over ball (handleBallCollision scene)
                $ scene
   in (Right scene', updateBall)
+
+handleInput :: Keys -> GameScene -> GameScene
+handleInput keys scene =
+  let playerBase = view baseY scene
+      updatePlayerV = updatePlayerXV keys . updatePlayerYV playerBase keys
+  in  over player1 updatePlayerV .
+      over player2 updatePlayerV $ scene
 
 logic :: (HasTime t s, Monad m) => GameScene -> Wire s () m (GameScene, [SDL.Event]) GameScene
 logic startScene = proc (scene, events) -> do
   untilQuitOrClose -< events
   keys <- handleKeyEvents -< events
-  let p1 = updatePlayerV (view baseY startScene) keys (view player1 scene)
-  p1' <- moveWithGravity -< p1
+  let scene' = handleInput keys scene
+  [p1', p2'] <- moveWithGravity -< [view player1 scene', view player2 scene']
+  clouds' <- moveWithGravity -< view clouds scene'
+  [ball'] <- moveWithGravity -< [view ball scene']
   let p1'' = restrictPlayerPos (view baseY startScene) p1'
-  let p2 = updatePlayerV (view baseY startScene) keys (view player2 scene)
-  p2' <- moveWithGravity -< p2
-  let p2'' = restrictPlayerPos (view baseY startScene) p2'
-  clouds' <- moveClouds (view width startScene) -< view clouds scene
-  scene' <- updateBall -< scene
+      p2'' = restrictPlayerPos (view baseY startScene) p2'
+      w = view width startScene
+      clouds'' = map (over xPos (wrap (-w/2) w)) clouds'
+  scene'' <- updateBall -< set ball ball' scene
   returnA -< set player2 p2'' .
              set player1 p1'' .
-             set clouds clouds'
-             $ scene'
+             set clouds clouds''
+             $ scene''
 
 anyRenderingDriver = -1
 
