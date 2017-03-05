@@ -84,19 +84,11 @@ bounceGround scene ball = if isBouncing then bounce ball else ball
 
 playerCoefficient = 1 / 5
 
-bouncePlayer :: Player -> Ball -> Ball
-bouncePlayer player ball = if isBouncing then bounce ball else ball
+-- Collision happens if distance is smaller then sum of both radii.
+-- Returns normal and corrected ball in case of collision.
+checkCollision :: Player -> Ball -> Maybe ((Float, Float), Ball)
+checkCollision player ball = if isBouncing then Just (normal, newball) else Nothing
   where
-    -- Collision happens if distance is smaller then sum of both radii.
-    -- Momentum is transported in normal direction only, tangential component
-    -- stays same. Mass of player is >> mass of ball.
-    -- Coefficient k (0-1) describes how much energy is preserved.
-    -- Formula for resulting velocities (in normal direction):
-    -- v1' = (m1*v1 + m2*v2 - m2*(v1 - v2)*k) / (m1 + m2)
-    -- v2' = (m1*v1 + m2*v2 - m1*(v2 - v1)*k) / (m1 + m2)
-    -- and with m1 << m2:
-    -- v1' = v2 - (v1 - v2)*k
-    -- v2' = v2
     ((px, py), pr) = collisionCircle $ view playerSprite player
     ((bx, by), br) = collisionCircle $ view ballSprite ball
     -- vector pointing from player to ball
@@ -105,27 +97,19 @@ bouncePlayer player ball = if isBouncing then bounce ball else ball
     sqrDist = pbx*pbx + pby*pby
     d = sqrt sqrDist
     -- normal
-    (nx, ny) = if d > 0.001 then (pbx / d, pby / d)
-                            else (0, -1) -- pathological case, just point up
-    -- tangent
-    (tx, ty) = (-ny, nx)
-    -- ball velocity
-    (bxv, byv) = (view xVel ball, view yVel ball)
-    (bnv, btv) = (bxv * nx + byv * ny, bxv * tx + byv * ty) -- dot products
-    -- player velocity
-    (pxv, pyv) = (view xVel player, view yVel player)
-    pnv = pxv * nx + pyv * ny
-    -- if near enough, and ball moves in direction of player:
+    normal@(nx, ny) = if d > 0.001 then (pbx / d, pby / d)
+                                   else (0, -1) -- pathological case, just point up
     isBouncing = sqrDist < rsum*rsum - 0.001
-    -- new ball velocity in normal direction
-    bnv' = pnv - (bnv - pnv)*playerCoefficient
     -- move ball to outside of player along normal
     correctionDistance = rsum - d
     (dx, dy) = (correctionDistance * nx, correctionDistance * ny)
-    bounce = set xVel (bnv' * nx + btv * tx) .
-             set yVel (bnv' * ny + btv * ty) .
-             over xPos (+dx) .
-             over yPos (+dy)
+    newball = over xPos (+dx) . over yPos (+dy) $ ball
+
+bouncePlayer :: Player -> Ball -> Ball
+bouncePlayer player ball =
+  case checkCollision player ball of
+    Just (normal, ball') -> bounce playerCoefficient normal player ball'
+    Nothing              -> ball
 
 bouncePlayers :: GameScene -> Ball -> Ball
 bouncePlayers scene = bouncePlayer (view player1 scene) .
