@@ -8,6 +8,13 @@ import Control.Arrow
 import Control.Lens
 
 type Velocity = Float
+type Radius = Float
+type Circle = ((Position, Position), Radius)
+
+data CollisionShape =
+  CollisionNone |
+  CollisionCircle Circle
+  deriving Show
 
 frame :: Lens' m Position -> Lens' m Velocity -> Lens' m (Position, Velocity)
 frame pos vel = lens (view pos &&& view vel)
@@ -22,6 +29,8 @@ class Located m => Moving m where
   yFrame = frame yPos yVel
   gravity :: m -> Float
   gravity = const 0
+  collisionShape :: m -> CollisionShape
+  collisionShape = const CollisionNone
 
 moveFrame :: Float -> (Position, Velocity) -> (Position, Velocity)
 moveFrame dt (p, v) = (p + v * dt, v)
@@ -36,6 +45,35 @@ moveWithGravityStep :: Moving o => Float -> o -> o
 moveWithGravityStep dt obj =
   over xFrame (moveFrame dt) .
   over yFrame (moveFrameWithGravity (gravity obj) dt) $ obj
+
+-- Collision happens if distance is smaller then sum of both radii.
+-- Returns normal and correction values for o1 in case of collision.
+checkCollisionCircleCircle :: Circle -> Circle -> Maybe ((Float, Float), (Float, Float))
+checkCollisionCircleCircle ((x2, y2), r2) ((x1, y1), r1) =
+  if isColliding then Just (normal, (dx, dy))
+                 else Nothing
+  where
+    -- vector pointing from o2 to o1
+    (dx21, dy21) = (x1 - x2, y1 - y2)
+    rsum = r1 + r2
+    sqrDist = dx21*dx21 + dy21*dy21
+    d = sqrt sqrDist
+    -- normal
+    normal@(nx, ny) = if d > 0.001 then (dx21 / d, dy21 / d)
+                                   else (0, -1) -- pathological case, just point up
+    isColliding = sqrDist < rsum*rsum - 0.001
+    -- move ball to outside of player along normal
+    correctionDistance = rsum - d
+    (dx, dy) = (correctionDistance * nx, correctionDistance * ny)
+
+checkCollision :: (Moving o1, Moving o2) => o2 -> o1 -> Maybe ((Float, Float), o1)
+checkCollision o2 o1 =
+  case (collisionShape o1, collisionShape o2) of
+    (CollisionCircle c1, CollisionCircle c2) -> do
+      (normal, (dx, dy)) <- checkCollisionCircleCircle c2 c1
+      let new1 = over xPos (+dx) . over yPos (+dy) $ o1
+      return (normal, new1)
+    _ -> Nothing
 
 bounce :: (Moving o1, Moving o2) => Float -> (Float, Float) -> o2 -> o1 -> o1
 bounce coeff (nx, ny) o2 o1 = set xVel (nv1' * nx + tv1 * tx) .
@@ -60,3 +98,9 @@ bounce coeff (nx, ny) o2 o1 = set xVel (nv1' * nx + tv1 * tx) .
     nv2 = xv2 * nx + yv2 * ny
     -- new o1 velocity in normal direction
     nv1' = nv2 - (nv1 - nv2)*coeff
+
+handleCollision :: (Moving o1, Moving o2) => Float -> o2 -> o1 -> o1
+handleCollision coeff heavy light =
+  case checkCollision heavy light of
+    Just (normal, light') -> bounce coeff normal heavy light'
+    Nothing              -> light

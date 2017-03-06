@@ -15,6 +15,13 @@ import System.Random
 
 sceneGravity = 2500
 
+-- Circle with radius = width and located at top of sprite
+collisionCircle :: Sprite -> CollisionShape
+collisionCircle s =
+  let r = fromIntegral (view w s) / 2
+      (sx, sy) = spriteTopLeft s
+  in CollisionCircle ((sx + r, sy + r), r)
+
 data Player = Player {
   _leftKey :: SDL.Scancode,
   _rightKey :: SDL.Scancode,
@@ -34,13 +41,7 @@ instance Moving Player where
   xVel = playerXV
   yVel = playerYV
   gravity = const sceneGravity
-
--- Circle with radius = width and located at top of sprite
-collisionCircle :: Sprite -> ((Float, Float), Float) -- ((x, y), r)
-collisionCircle s =
-  let r = fromIntegral (view w s) / 2
-      (sx, sy) = spriteTopLeft s
-  in ((sx + r, sy + r), r)
+  collisionShape = collisionCircle . view playerSprite
 
 data Cloud = Cloud {
   _cloudXV :: Float,
@@ -74,6 +75,7 @@ instance Moving Ball where
   xVel = ballXV
   yVel = ballYV
   gravity = const (sceneGravity / 2)
+  collisionShape = collisionCircle . view ballSprite
 
 -- ball must have transformation
 ballA :: Lens' Ball Float

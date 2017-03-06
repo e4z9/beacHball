@@ -84,36 +84,9 @@ bounceGround scene ball = if isBouncing then bounce ball else ball
 
 playerCoefficient = 1 / 5
 
--- Collision happens if distance is smaller then sum of both radii.
--- Returns normal and corrected ball in case of collision.
-checkCollision :: Player -> Ball -> Maybe ((Float, Float), Ball)
-checkCollision player ball = if isBouncing then Just (normal, newball) else Nothing
-  where
-    ((px, py), pr) = collisionCircle $ view playerSprite player
-    ((bx, by), br) = collisionCircle $ view ballSprite ball
-    -- vector pointing from player to ball
-    (pbx, pby) = (bx - px, by - py)
-    rsum = pr + br
-    sqrDist = pbx*pbx + pby*pby
-    d = sqrt sqrDist
-    -- normal
-    normal@(nx, ny) = if d > 0.001 then (pbx / d, pby / d)
-                                   else (0, -1) -- pathological case, just point up
-    isBouncing = sqrDist < rsum*rsum - 0.001
-    -- move ball to outside of player along normal
-    correctionDistance = rsum - d
-    (dx, dy) = (correctionDistance * nx, correctionDistance * ny)
-    newball = over xPos (+dx) . over yPos (+dy) $ ball
-
-bouncePlayer :: Player -> Ball -> Ball
-bouncePlayer player ball =
-  case checkCollision player ball of
-    Just (normal, ball') -> bounce playerCoefficient normal player ball'
-    Nothing              -> ball
-
 bouncePlayers :: GameScene -> Ball -> Ball
-bouncePlayers scene = bouncePlayer (view player1 scene) .
-                      bouncePlayer (view player2 scene)
+bouncePlayers scene = handleCollision playerCoefficient (view player1 scene) .
+                      handleCollision playerCoefficient (view player2 scene)
 
 handleBallCollision :: GameScene -> Ball -> Ball
 handleBallCollision scene = bounceWalls scene . bounceGround scene .
