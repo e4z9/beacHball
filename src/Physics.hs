@@ -76,11 +76,12 @@ checkCollision o2 o1 =
     _ -> Nothing
 
 bounce :: (Moving o1, Moving o2) => Float -> (Float, Float) -> o2 -> o1 -> o1
-bounce coeff (nx, ny) o2 o1 = set xVel (nv1' * nx + tv1 * tx) .
-                  set yVel (nv1' * ny + tv1 * ty) $ o1
+bounce coeff (nx, ny) o2 o1 = set xVel (nv1' * nx + tv1' * tx) .
+                  set yVel (nv1' * ny + tv1' * ty) $ o1
   where
     -- Momentum is transported in normal direction only, tangential component
-    -- stays same. Mass of o2 is >> mass of o1.
+    -- stays same (except for energy loss described by coefficient).
+    -- Mass of o2 is >> mass of o1.
     -- Coefficient k (0-1) describes how much energy is preserved.
     -- Formula for resulting velocities (in normal direction):
     -- v1' = (m1*v1 + m2*v2 - m2*(v1 - v2)*k) / (m1 + m2)
@@ -96,8 +97,9 @@ bounce coeff (nx, ny) o2 o1 = set xVel (nv1' * nx + tv1 * tx) .
     -- o2 (heavy object) velocity
     (xv2, yv2) = (view xVel o2, view yVel o2)
     nv2 = xv2 * nx + yv2 * ny
-    -- new o1 velocity in normal direction
+    -- new o1 velocity
     nv1' = nv2 - (nv1 - nv2)*coeff
+    tv1' = tv1 * coeff
 
 handleCollision :: (Moving o1, Moving o2) => Float -> o2 -> o1 -> o1
 handleCollision coeff heavy light =
