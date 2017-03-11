@@ -1,4 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Physics where
 
@@ -9,11 +10,13 @@ import Control.Lens
 
 type Velocity = Float
 type Radius = Float
-type Circle = ((Position, Position), Radius)
+type Circle = ((Position, Position), Radius) -- mid point, radius
+type Line = ((Position, Position), (Position, Position)) -- point, normal
 
 data CollisionShape =
   CollisionNone |
-  CollisionCircle Circle
+  CollisionCircle Circle |
+  CollisionLine Line
   deriving Show
 
 frame :: Lens' m Position -> Lens' m Velocity -> Lens' m (Position, Velocity)
@@ -32,6 +35,29 @@ class Located m => Moving m where
   collisionShape :: m -> CollisionShape
   collisionShape = const CollisionNone
 
+data Object = Object {
+  _objX :: Position,
+  _objY :: Position,
+  _objXVel :: Velocity,
+  _objYVel :: Velocity,
+  _objGravity :: Float,
+  _objCollisionShape :: CollisionShape
+}
+makeLenses ''Object
+
+newObject :: Object
+newObject = Object 0 0 0 0 0 CollisionNone
+
+instance Located Object where
+  xPos = objX
+  yPos = objY
+
+instance Moving Object where
+  xVel = objXVel
+  yVel = objYVel
+  gravity = view objGravity
+  collisionShape = view objCollisionShape
+
 moveFrame :: Float -> (Position, Velocity) -> (Position, Velocity)
 moveFrame dt (p, v) = (p + v * dt, v)
 
@@ -45,6 +71,19 @@ moveWithGravityStep :: Moving o => Float -> o -> o
 moveWithGravityStep dt obj =
   over xFrame (moveFrame dt) .
   over yFrame (moveFrameWithGravity (gravity obj) dt) $ obj
+
+checkCollisionCircleLine :: Line -> Circle -> Maybe ((Float, Float), (Float, Float))
+checkCollisionCircleLine ((lx, ly), (nx, ny)) ((cx, cy), cr) =
+  if isColliding then Just ((nx, ny), (dx, dy))
+                 else Nothing
+  where
+    -- vector pointing from line base and circle
+    (lcx, lcy) = (cx - lx, cy - ly)
+    -- normal component
+    d = lcx * nx + lcy * ny
+    isColliding = d < cr - 0.001
+    correctionDistance = cr - d
+    (dx, dy) = (correctionDistance * nx, correctionDistance * ny)
 
 -- Collision happens if distance is smaller then sum of both radii.
 -- Returns normal and correction values for o1 in case of collision.
@@ -69,6 +108,11 @@ checkCollisionCircleCircle ((x2, y2), r2) ((x1, y1), r1) =
 checkCollision :: (Moving o1, Moving o2) => o2 -> o1 -> Maybe ((Float, Float), o1)
 checkCollision o2 o1 =
   case (collisionShape o1, collisionShape o2) of
+    (CollisionCircle c, CollisionLine l) -> do
+      (normal, (dx, dy)) <- checkCollisionCircleLine l c
+      let newc = over xPos (+dx) . over yPos (+dy) $ o1
+      return (normal, newc)
+    (CollisionLine l, CollisionCircle c) -> Nothing
     (CollisionCircle c1, CollisionCircle c2) -> do
       (normal, (dx, dy)) <- checkCollisionCircleCircle c2 c1
       let new1 = over xPos (+dx) . over yPos (+dy) $ o1
@@ -102,7 +146,10 @@ bounce coeff (nx, ny) o2 o1 = set xVel (nv1' * nx + tv1' * tx) .
     tv1' = tv1 * coeff
 
 handleCollision :: (Moving o1, Moving o2) => Float -> o2 -> o1 -> o1
-handleCollision coeff heavy light =
+handleCollision = handleCollisionEx id
+
+handleCollisionEx :: (Moving o1, Moving o2) => (o1 -> o1) -> Float -> o2 -> o1 -> o1
+handleCollisionEx callback coeff heavy light =
   case checkCollision heavy light of
-    Just (normal, light') -> bounce coeff normal heavy light'
-    Nothing              -> light
+    Just (normal, light') -> callback $ bounce coeff normal heavy light'
+    Nothing               -> light

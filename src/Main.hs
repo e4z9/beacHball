@@ -74,13 +74,8 @@ bounceWalls scene ball = bounceRight . bounceLeft $ ball
 groundCoefficient = 2 / 3
 
 bounceGround :: GameScene -> Ball -> Ball
-bounceGround scene ball = if isBouncing then bounce ball else ball
-  where
-    base = view baseY scene - fromIntegral (view (ballSprite . h) ball) / 2
-    isBouncing = view yPos ball > base
-    bounce = set yPos base . over yVel (negate . (* groundCoefficient)) .
-             over xVel (* groundCoefficient) .
-             over ballAV (* groundCoefficient)
+bounceGround scene = handleCollisionEx (over ballAV (* groundCoefficient))
+                                       groundCoefficient (view ground scene)
 
 playerCoefficient = 1 / 5
 
