@@ -61,15 +61,11 @@ wrap mini maxi p
   | p < mini  = maxi - (mini - p)
   | otherwise = p
 
+wallCoefficient = 1
+
 bounceWalls :: GameScene -> Ball -> Ball
-bounceWalls scene ball = bounceRight . bounceLeft $ ball
-  where halfBall :: Float
-        halfBall = fromIntegral (view (ballSprite . w) ball) / 2
-        bounceLeft b = if view xPos b - halfBall > 0 then b
-                       else setRandomAV $ set xPos halfBall . over xVel negate $ b
-        sw = view width scene
-        bounceRight b = if view xPos b + halfBall < sw  then b
-                        else setRandomAV $ set xPos (sw - halfBall) . over xVel negate $ b
+bounceWalls scene ball = foldr (handleCollisionEx setRandomAV wallCoefficient)
+                         ball [view leftWall scene, view rightWall scene]
 
 groundCoefficient = 2 / 3
 

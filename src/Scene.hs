@@ -97,6 +97,8 @@ data GameScene = GameScene {
   _height :: Float,
   _baseY :: Float,
   _ground :: Object,
+  _leftWall :: Object,
+  _rightWall :: Object,
   _sun :: Sprite,
   _clouds :: [Cloud],
   _background :: Sprite,
@@ -198,10 +200,14 @@ startScene window renderer = do
       ground = set yPos base .
                set objCollisionShape (CollisionLine ((0, base), (0, -1)))
                $ newObject
+      leftWall = set objCollisionShape (CollisionLine ((0, 0), (1, 0))) newObject
+      rightWall = set xPos width .
+                  set objCollisionShape (CollisionLine ((width, 0), (-1, 0)))
+                  $ newObject
   p1 <- createPlayer1 renderer width base
   p2 <- createPlayer2 renderer width base
   sun <- createSun renderer width
   bg <- createBackground renderer width height
   clouds <- createClouds renderer width height
   ball <- createBall renderer width height
-  return $ GameScene width height base ground sun clouds bg ball p1 p2
+  return $ GameScene width height base ground leftWall rightWall sun clouds bg ball p1 p2
