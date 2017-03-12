@@ -12,7 +12,7 @@ import Control.Lens
 import Control.Wire
 import FRP.Netwire
 import qualified SDL
-import Prelude hiding ((.))
+import Prelude hiding ((.), id)
 
 playerSpeed :: Velocity
 playerSpeed = 200
@@ -61,34 +61,21 @@ wrap mini maxi p
   | p < mini  = maxi - (mini - p)
   | otherwise = p
 
-wallCoefficient = 1
+wallC = 1
+groundC = 2 / 3
+playerC = 1 / 5
 
-bounceWalls :: GameScene -> Ball -> Ball
-bounceWalls scene ball = foldr (handleCollisionEx setRandomAV wallCoefficient)
-                         ball [view leftWall scene, view rightWall scene]
-
-groundCoefficient = 2 / 3
-
-bounceGround :: GameScene -> Ball -> Ball
-bounceGround scene = handleCollisionEx (over ballAV (* groundCoefficient))
-                                       groundCoefficient (view ground scene)
-
-playerCoefficient = 1 / 5
-
-bouncePlayers :: GameScene -> Ball -> Ball
-bouncePlayers scene = handleCollision playerCoefficient (view player1 scene) .
-                      handleCollision playerCoefficient (view player2 scene)
-
-handleBallCollision :: GameScene -> Ball -> Ball
-handleBallCollision scene = bounceWalls scene . bounceGround scene .
-                            bouncePlayers scene
+handleBallCollision :: GameScene -> GameScene
+handleBallCollision = collideLenses setRandomAV wallC ball [leftWall, rightWall] .
+                      collideLenses slowAV groundC ball [ground] .
+                      collideLenses id playerC ball [player1, player2]
+  where slowAV = over ballAV (* groundC)
 
 updateBall :: HasTime t s => Wire s e m GameScene GameScene
 updateBall = mkPure $ \ds scene ->
   let dt = realToFrac $ dtime ds
       scene' = over (ball . ballAFrame) (moveFrame dt) .
-               over ball (handleBallCollision scene)
-               $ scene
+               handleBallCollision $ scene
   in (Right scene', updateBall)
 
 handleInput :: Keys -> GameScene -> GameScene

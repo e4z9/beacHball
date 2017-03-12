@@ -145,11 +145,13 @@ bounce coeff (nx, ny) o2 o1 = set xVel (nv1' * nx + tv1' * tx) .
     nv1' = nv2 - (nv1 - nv2)*coeff
     tv1' = tv1 * coeff
 
-handleCollision :: (Moving o1, Moving o2) => Float -> o2 -> o1 -> o1
-handleCollision = handleCollisionEx id
-
-handleCollisionEx :: (Moving o1, Moving o2) => (o1 -> o1) -> Float -> o2 -> o1 -> o1
-handleCollisionEx callback coeff heavy light =
+collide :: (Moving o1, Moving o2) => (o1 -> o1) -> Float -> o2 -> o1 -> o1
+collide callback coeff heavy light =
   case checkCollision heavy light of
     Just (normal, light') -> callback $ bounce coeff normal heavy light'
     Nothing               -> light
+
+collideLenses :: (Foldable f, Moving o, Moving b) => (b -> b) -> Float -> ASetter' s b -> f (Getting o s o) -> s -> s
+collideLenses callback coeff b getters s = over b updateB s
+  where
+    updateB b = foldr (collide callback coeff . flip view s) b getters
