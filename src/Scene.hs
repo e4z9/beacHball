@@ -109,13 +109,14 @@ data GameScene = GameScene {
 makeLenses ''GameScene
 
 instance Scene GameScene where
-  renderScene s f = do
-    f $ view sun s
-    mapM_ (f . view cloudSprite) $ view clouds s
-    f $ view background s
-    f $ view (ball . ballSprite) s
-    f $ view (player1 . playerSprite) s
-    f $ view (player2 . playerSprite) s
+  forItems_ s f =
+    f (view sun s) *>
+    forOf_ (clouds . traverse . cloudSprite) s f *>
+    f (view background s) *>
+    f (view (ball . ballSprite) s) *>
+    f (view (player1 . playerSprite) s) *>
+    f (view (player2 . playerSprite) s) *>
+    pure ()
   clearColor _ = SDL.V4 155 220 255 255
 
 createPlayer1 :: SDL.Renderer -> Float -> Float -> IO Player

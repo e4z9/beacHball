@@ -52,7 +52,7 @@ instance Located Sprite where
   yPos = y
 
 class Scene s where
-  renderScene :: MonadIO m => s -> (Sprite -> m ()) -> m ()
+  forItems_ :: Applicative m => s -> (Sprite -> m a) -> m ()
   clearColor :: s -> SDL.V4 Word8
 
 createSprite :: MonadIO m => SDL.Renderer -> FilePath -> m Sprite
@@ -114,7 +114,7 @@ render :: (MonadIO m, Scene s) => SDL.Renderer -> s -> m ()
 render r scene = do
   SDL.rendererDrawColor r SDL.$= clearColor scene
   SDL.clear r
-  renderScene scene $ renderSprite r
+  forItems_ scene $ renderSprite r
   SDL.present r
 
 renderLoop :: (HasTime t s, Monoid e, MonadIO m, Scene sc) => SDL.Renderer -> sc -> Session m s -> Wire s e m (sc, [SDL.Event]) sc -> m ()
