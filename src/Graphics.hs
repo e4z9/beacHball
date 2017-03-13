@@ -39,32 +39,47 @@ makeLenses ''SpriteTransform
 data Sprite = Sprite {
   _texture :: SDL.Texture,
   _anchor :: Anchor,
-  _x :: Position,
-  _y :: Position,
   _w :: Int,
   _h :: Int,
   _spriteTransform :: Maybe SpriteTransform
 }
 makeLenses ''Sprite
 
-instance Located Sprite where
-  xPos = x
-  yPos = y
+data RenderItem =
+  RenderNothing |
+  RenderSprite Sprite
+
+data GraphicsItem = GraphicsItem {
+  _itemX :: Position,
+  _itemY :: Position,
+  _itemRenderItem :: RenderItem
+}
+makeLenses ''GraphicsItem
+
+instance Located GraphicsItem where
+  xPos = itemX
+  yPos = itemY
 
 class Scene s where
-  forItems_ :: Applicative m => s -> (Sprite -> m a) -> m ()
+  forItems_ :: Applicative m => s -> (GraphicsItem -> m a) -> m ()
   clearColor :: s -> SDL.V4 Word8
 
-createSprite :: MonadIO m => SDL.Renderer -> FilePath -> m Sprite
-createSprite renderer texturePath = do
-  (texture, w, h) <- loadTexture renderer texturePath
-  return $ Sprite texture AnchorCenter 0 0 w h Nothing
+graphicsItem :: GraphicsItem
+graphicsItem = GraphicsItem 0 0 RenderNothing
 
-spriteTopLeft :: Sprite -> (Position, Position)
-spriteTopLeft sprite =
-  let xs = view x sprite
-      ys = view y sprite
-      ws = fromIntegral $ view w sprite
+graphicsSpriteItem :: MonadIO m => SDL.Renderer -> FilePath -> m GraphicsItem
+graphicsSpriteItem renderer texturePath = do
+  s <- RenderSprite <$> sprite renderer texturePath
+  return $ set itemRenderItem s graphicsItem
+
+sprite :: MonadIO m => SDL.Renderer -> FilePath -> m Sprite
+sprite renderer texturePath = do
+  (texture, w, h) <- loadTexture renderer texturePath
+  return $ Sprite texture AnchorCenter w h Nothing
+
+spriteTopLeft :: Position -> Position -> Sprite -> (Position, Position)
+spriteTopLeft xs ys sprite =
+  let ws = fromIntegral $ view w sprite
       hs = fromIntegral $ view h sprite
   in case view anchor sprite of
     AnchorTopLeft     -> (xs, ys)
@@ -93,9 +108,9 @@ loadTexture renderer path = do
   SDL.textureBlendMode tex2 SDL.$= SDL.BlendAlphaBlend
   return (tex2, fromIntegral w, fromIntegral h)
 
-renderSprite :: MonadIO m => SDL.Renderer -> Sprite -> m ()
-renderSprite r sprite = do
-  let (xp, yp) = spriteTopLeft sprite
+renderSprite :: MonadIO m => SDL.Renderer -> Position -> Position -> Sprite -> m ()
+renderSprite r x y sprite = do
+  let (xp, yp) = spriteTopLeft x y sprite
       xi = fromIntegral $ round xp
       yi = fromIntegral $ round yp
       tex = view texture sprite
@@ -110,11 +125,19 @@ renderSprite r sprite = do
       (uncurry SDL.V2 $ view transformFlip t))
     trans
 
+renderItem :: MonadIO m => SDL.Renderer -> GraphicsItem -> m ()
+renderItem r item =
+  let x = view itemX item
+      y = view itemY item
+  in  case view itemRenderItem item of
+        RenderSprite sprite -> renderSprite r x y sprite
+        _                   -> return ()
+
 render :: (MonadIO m, Scene s) => SDL.Renderer -> s -> m ()
 render r scene = do
   SDL.rendererDrawColor r SDL.$= clearColor scene
   SDL.clear r
-  forItems_ scene $ renderSprite r
+  forItems_ scene $ renderItem r
   SDL.present r
 
 renderLoop :: (HasTime t s, Monoid e, MonadIO m, Scene sc) => SDL.Renderer -> sc -> Session m s -> Wire s e m (sc, [SDL.Event]) sc -> m ()
