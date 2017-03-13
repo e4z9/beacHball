@@ -35,10 +35,10 @@ bounded mini maxi a
 
 jumpVelocity = -1000
 
-moveWithGravity :: (HasTime t s, Moving o, Functor f) => Wire s e m (f o) (f o)
-moveWithGravity = mkPure $ \ds os ->
+moveWithGravity :: (HasTime t s, Moving o, Foldable f) => Wire s e m (f (ASetter' g o), g) g
+moveWithGravity = mkPure $ \ds (setters, g) ->
   let dt = realToFrac $ dtime ds
-  in  (Right $ fmap (moveWithGravityStep dt) os, moveWithGravity)
+  in  (Right $ moveWithGravityLenses dt setters g, moveWithGravity)
 
 updatePlayerYV :: Position -> Keys -> Player -> Player
 updatePlayerYV baseY keys player =
@@ -89,19 +89,17 @@ logic :: (HasTime t s, Monad m) => GameScene -> Wire s () m (GameScene, [SDL.Eve
 logic startScene = proc (scene, events) -> do
   untilQuitOrClose -< events
   keys <- handleKeyEvents -< events
-  let scene' = handleInput keys scene
-  [p1', p2'] <- moveWithGravity -< [view player1 scene', view player2 scene']
-  clouds' <- moveWithGravity -< view clouds scene'
-  [ball'] <- moveWithGravity -< [view ball scene']
-  let p1'' = restrictPlayerPos (view baseY startScene) p1'
-      p2'' = restrictPlayerPos (view baseY startScene) p2'
-      w = view width startScene
-      clouds'' = map (over xPos (wrap (-w/2) w)) clouds'
-  scene'' <- updateBall -< set ball ball' scene
-  returnA -< set player2 p2'' .
-             set player1 p1'' .
-             set clouds clouds''
-             $ scene''
+  let scene1 = handleInput keys scene
+  scene2 <- moveWithGravity -< ([player1, player2], scene1)
+  scene3 <- moveWithGravity -< ([clouds . traverse], scene2)
+  scene4 <- moveWithGravity -< ([ball], scene3)
+  let w = view width startScene
+      base = view baseY startScene
+      scene5 = over player1 (restrictPlayerPos base) .
+               over player2 (restrictPlayerPos base) .
+               over clouds (map (over xPos (wrap (-w/2) w)))
+               $ scene4
+  updateBall -< scene5
 
 anyRenderingDriver = -1
 

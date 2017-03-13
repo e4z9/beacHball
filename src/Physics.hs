@@ -72,6 +72,9 @@ moveWithGravityStep dt obj =
   over xFrame (moveFrame dt) .
   over yFrame (moveFrameWithGravity (gravity obj) dt) $ obj
 
+moveWithGravityLenses :: (Foldable f, Moving o) => Float -> f (ASetter' s o) -> s -> s
+moveWithGravityLenses dt setters s = foldr (`over` moveWithGravityStep dt) s setters
+
 checkCollisionCircleLine :: Line -> Circle -> Maybe ((Float, Float), (Float, Float))
 checkCollisionCircleLine ((lx, ly), (nx, ny)) ((cx, cy), cr) =
   if isColliding then Just ((nx, ny), (dx, dy))
