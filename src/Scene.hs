@@ -131,32 +131,31 @@ instance Scene GameScene where
     pure ()
   clearColor _ = SDL.V4 155 220 255 255
 
-createPlayer1 :: SDL.Renderer -> Float -> Float -> IO Player
-createPlayer1 r width base = do
+createPlayer :: SDL.Renderer -> Float -> SDL.Scancode -> SDL.Scancode -> SDL.Scancode
+                -> (Float -> Float) -> (Float -> Float) -> IO Player
+createPlayer r base left right up getMinX getMaxX = do
   item <- graphicsSpriteItem r =<< getDataFileName "potato_sml.png"
   let halfSpriteW = fromIntegral (view (unsafeSprite . w) item) / 2
-      minX = halfSpriteW
-      maxX = width / 2 - halfSpriteW
-      player = Player SDL.ScancodeA SDL.ScancodeD SDL.ScancodeW
-                      (minX, maxX) 0 0 item
-  return $ set xPos (width / 4) .
+      minX = getMinX halfSpriteW
+      maxX = getMaxX halfSpriteW
+      player = Player left right up (minX, maxX) 0 0 item
+  return $ set xPos ((minX + maxX) / 2) .
            set yPos base .
            set (playerItem . unsafeSprite . anchor) AnchorBottomMid
            $ player
 
+createPlayer1 :: SDL.Renderer -> Float -> Float -> IO Player
+createPlayer1 r width base =
+  createPlayer r base SDL.ScancodeA SDL.ScancodeD SDL.ScancodeW getMinX getMaxX
+  where getMinX = id
+        getMaxX halfSpriteW = width / 2 - halfSpriteW
+
 createPlayer2 :: SDL.Renderer -> Float -> Float -> IO Player
 createPlayer2 r width base = do
-  item <- graphicsSpriteItem r =<< getDataFileName "potato_sml.png"
-  let halfSpriteW = fromIntegral (view (unsafeSprite . w) item) / 2
-      minX = width / 2 + halfSpriteW
-      maxX = width - halfSpriteW
-      player = Player SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp
-                      (minX, maxX) 0 0 item
-  return $ set xPos (width - width / 4) .
-           set yPos base .
-           set (playerItem . unsafeSprite . anchor) AnchorBottomMid .
-           set (playerItem . unsafeSprite . spriteTransform) (Just $ SpriteTransform 0 (True, False))
-           $ player
+    p <- createPlayer r base SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp getMinX getMaxX
+    return $ set (playerItem . unsafeSprite . spriteTransform) (Just $ SpriteTransform 0 (True, False)) p
+  where getMinX halfSpriteW = width / 2 + halfSpriteW
+        getMaxX halfSpriteW = width - halfSpriteW
 
 setRandomAV :: Ball -> Ball
 setRandomAV b =
