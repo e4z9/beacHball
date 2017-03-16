@@ -31,55 +31,36 @@ data Player = Player {
   _rightKey :: SDL.Scancode,
   _upKey :: SDL.Scancode,
   _playerHBounds :: (Float, Float),
-  _playerXV :: Float,
-  _playerYV :: Float,
-  _playerItem :: GraphicsItem
+  _playerObject :: Object
 }
 makeLenses ''Player
 
 instance Located Player where
-  xPos = playerItem . xPos
-  yPos = playerItem . yPos
+  xPos = playerObject . xPos
+  yPos = playerObject . yPos
 
 instance Moving Player where
-  xVel = playerXV
-  yVel = playerYV
-  gravity = const sceneGravity
-  collisionShape = collisionCircle . view playerItem
-
-data Cloud = Cloud {
-  _cloudXV :: Float,
-  _cloudYV :: Float,
-  _cloudItem :: GraphicsItem
-}
-makeLenses ''Cloud
-
-instance Located Cloud where
-  xPos = cloudItem . xPos
-  yPos = cloudItem . yPos
-
-instance Moving Cloud where
-  xVel = cloudXV
-  yVel = cloudYV
+  xVel = playerObject . xVel
+  yVel = playerObject . yVel
+  gravity = gravity . view playerObject
+  collisionShape = collisionShape . view playerObject
 
 data Ball = Ball {
   _ballRandomGen :: StdGen,
   _ballAV :: Float,
-  _ballXV :: Float,
-  _ballYV :: Float,
-  _ballItem :: GraphicsItem
+  _ballObject :: Object
 }
 makeLenses ''Ball
 
 instance Located Ball where
-  xPos = ballItem . xPos
-  yPos = ballItem . yPos
+  xPos = ballObject . xPos
+  yPos = ballObject . yPos
 
 instance Moving Ball where
-  xVel = ballXV
-  yVel = ballYV
-  gravity = const (sceneGravity / 2)
-  collisionShape = collisionCircle . view ballItem
+  xVel = ballObject . xVel
+  yVel = ballObject . yVel
+  gravity = gravity . view ballObject
+  collisionShape = collisionShape . view ballObject
 
 unsafeSprite :: Lens' GraphicsItem Sprite
 unsafeSprite = lens unsafeGetSprite (\item s -> set itemRenderItem (RenderSprite s) item)
@@ -91,9 +72,9 @@ unsafeSprite = lens unsafeGetSprite (\item s -> set itemRenderItem (RenderSprite
 
 -- ball must have sprite and transformation
 ballA :: Lens' Ball Float
-ballA = lens (view transformAngle . fromJust . view (ballItem . unsafeSprite . spriteTransform))
-             (\b a -> set (ballItem . unsafeSprite . spriteTransform)
-                          (Just (set transformAngle a (fromJust $ view (ballItem . unsafeSprite . spriteTransform) b)))
+ballA = lens (view transformAngle . fromJust . view (ballObject . objItem . unsafeSprite . spriteTransform))
+             (\b a -> set (ballObject . objItem . unsafeSprite . spriteTransform)
+                          (Just (set transformAngle a (fromJust $ view (ballObject . objItem . unsafeSprite . spriteTransform) b)))
                           b)
 
 ballAFrame :: Lens' Ball (Float, Float)
@@ -112,7 +93,7 @@ data GameScene = GameScene {
   _leftWall :: Object,
   _rightWall :: Object,
   _sun :: GraphicsItem,
-  _clouds :: [Cloud],
+  _clouds :: [Object],
   _background :: GraphicsItem,
   _ball :: Ball,
   _player1 :: Player,
@@ -123,11 +104,11 @@ makeLenses ''GameScene
 instance Scene GameScene where
   forItems_ s f =
     f (view sun s) *>
-    forOf_ (clouds . traverse . cloudItem) s f *>
+    forOf_ (clouds . traverse . objItem) s f *>
     f (view background s) *>
-    f (view (ball . ballItem) s) *>
-    f (view (player1 . playerItem) s) *>
-    f (view (player2 . playerItem) s) *>
+    f (view (ball . ballObject . objItem) s) *>
+    f (view (player1 . playerObject . objItem) s) *>
+    f (view (player2 . playerObject . objItem) s) *>
     pure ()
   clearColor _ = SDL.V4 155 220 255 255
 
@@ -138,10 +119,13 @@ createPlayer r base left right up getMinX getMaxX = do
   let halfSpriteW = fromIntegral (view (unsafeSprite . w) item) / 2
       minX = getMinX halfSpriteW
       maxX = getMaxX halfSpriteW
-      player = Player left right up (minX, maxX) 0 0 item
+      player = Player left right up (minX, maxX) object
   return $ set xPos ((minX + maxX) / 2) .
            set yPos base .
-           set (playerItem . unsafeSprite . anchor) AnchorBottomMid
+           set (playerObject . objGravity) sceneGravity .
+           set (playerObject . objCollisionShape) (collisionCircle . view objItem) .
+           set (playerObject . objItem . unsafeSprite . anchor) AnchorBottomMid .
+           set (playerObject . objItem) item
            $ player
 
 createPlayer1 :: SDL.Renderer -> Float -> Float -> IO Player
@@ -151,9 +135,9 @@ createPlayer1 r width base =
         getMaxX halfSpriteW = width / 2 - halfSpriteW
 
 createPlayer2 :: SDL.Renderer -> Float -> Float -> IO Player
-createPlayer2 r width base = do
-    p <- createPlayer r base SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp getMinX getMaxX
-    return $ set (playerItem . unsafeSprite . spriteTransform) (Just $ SpriteTransform 0 (True, False)) p
+createPlayer2 r width base =
+  set (playerObject . objItem . unsafeSprite . spriteTransform) (Just $ SpriteTransform 0 (True, False))
+    <$> createPlayer r base SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp getMinX getMaxX
   where getMinX halfSpriteW = width / 2 + halfSpriteW
         getMaxX halfSpriteW = width - halfSpriteW
 
@@ -168,10 +152,14 @@ createBall r width height = do
   item <- graphicsSpriteItem r =<< getDataFileName "ball.png"
   rgen <- newStdGen
   xv <- randomRIO (-40, 40)
-  let ball = Ball rgen 0 (xv * 20) 0 item
+  let ball = Ball rgen 0 object
   return $ set xPos (width - width / 3) .
            set yPos (height / 3) .
-           set (ballItem . unsafeSprite . spriteTransform) (Just $ SpriteTransform 0 (False, False))
+           set xVel (xv * 20) .
+           set (ballObject . objGravity) (sceneGravity / 2) .
+           set (ballObject . objItem . unsafeSprite . spriteTransform) (Just $ SpriteTransform 0 (False, False)) .
+           set (ballObject . objCollisionShape) (collisionCircle . view objItem) .
+           set (ballObject . objItem) item
            $ setRandomAV ball
 
 createSun :: SDL.Renderer -> Float -> IO GraphicsItem
@@ -190,15 +178,20 @@ createBackground r w h = do
       sprite = Sprite tex AnchorBottomMid sw sh Nothing
   return $ GraphicsItem xp yp (RenderSprite sprite)
 
-createCloud :: SDL.Renderer -> Float -> Float -> FilePath -> IO Cloud
+createCloud :: SDL.Renderer -> Float -> Float -> FilePath -> IO Object
 createCloud r w h path = do
   item <- graphicsSpriteItem r path
   xp <- randomRIO (- w / 2, w)
   yp <- randomRIO (0, h / 4)
   v <- randomRIO (2, 40)
-  return $ Cloud v 0 $ set xPos xp . set yPos yp . set (unsafeSprite . anchor) AnchorTopLeft $ item
+  return $ set (objItem . unsafeSprite . anchor) AnchorTopLeft .
+           set xPos xp .
+           set yPos yp .
+           set xVel v .
+           set objItem item
+           $ object
 
-createClouds :: SDL.Renderer -> Float -> Float -> IO [Cloud]
+createClouds :: SDL.Renderer -> Float -> Float -> IO [Object]
 createClouds r w h = do
   paths <- mapM getDataFileName ["cloud" ++ show n ++ ".png" | n <- [1..5]]
   mapM (createCloud r w h) paths
@@ -211,12 +204,12 @@ startScene window renderer = do
       height = fromIntegral hi
       base = height - height / 7
       ground = set yPos base .
-               set objCollisionShape (CollisionLine ((0, base), (0, -1)))
-               $ newObject
-      leftWall = set objCollisionShape (CollisionLine ((0, 0), (1, 0))) newObject
+               set objCollisionShape (const $ CollisionLine ((0, base), (0, -1)))
+               $ object
+      leftWall = set objCollisionShape (const $ CollisionLine ((0, 0), (1, 0))) object
       rightWall = set xPos width .
-                  set objCollisionShape (CollisionLine ((width, 0), (-1, 0)))
-                  $ newObject
+                  set objCollisionShape (const $ CollisionLine ((width, 0), (-1, 0)))
+                  $ object
   p1 <- createPlayer1 renderer width base
   p2 <- createPlayer2 renderer width base
   sun <- createSun renderer width

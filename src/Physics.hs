@@ -36,27 +36,26 @@ class Located m => Moving m where
   collisionShape = const CollisionNone
 
 data Object = Object {
-  _objX :: Position,
-  _objY :: Position,
+  _objItem :: GraphicsItem,
   _objXVel :: Velocity,
   _objYVel :: Velocity,
   _objGravity :: Float,
-  _objCollisionShape :: CollisionShape
+  _objCollisionShape :: Object -> CollisionShape
 }
 makeLenses ''Object
 
-newObject :: Object
-newObject = Object 0 0 0 0 0 CollisionNone
+object :: Object
+object = Object graphicsItem 0 0 0 (const CollisionNone)
 
 instance Located Object where
-  xPos = objX
-  yPos = objY
+  xPos = objItem . xPos
+  yPos = objItem . yPos
 
 instance Moving Object where
   xVel = objXVel
   yVel = objYVel
   gravity = view objGravity
-  collisionShape = view objCollisionShape
+  collisionShape o = view objCollisionShape o o
 
 moveFrame :: Float -> (Position, Velocity) -> (Position, Velocity)
 moveFrame dt (p, v) = (p + v * dt, v)

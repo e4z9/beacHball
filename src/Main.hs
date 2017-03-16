@@ -90,16 +90,17 @@ logic startScene = proc (scene, events) -> do
   untilQuitOrClose -< events
   keys <- handleKeyEvents -< events
   let scene1 = handleInput keys scene
-  scene2 <- moveWithGravity -< ([player1, player2], scene1)
-  scene3 <- moveWithGravity -< ([clouds . traverse], scene2)
-  scene4 <- moveWithGravity -< ([ball], scene3)
+  scene2 <- moveWithGravity -< ([player1 . playerObject,
+                                 player2 . playerObject,
+                                 clouds . traverse,
+                                 ball . ballObject], scene1)
   let w = view width startScene
       base = view baseY startScene
-      scene5 = over player1 (restrictPlayerPos base) .
+      scene3 = over player1 (restrictPlayerPos base) .
                over player2 (restrictPlayerPos base) .
                over clouds (map (over xPos (wrap (-w/2) w)))
-               $ scene4
-  updateBall -< scene5
+               $ scene2
+  updateBall -< scene3
 
 anyRenderingDriver = -1
 
