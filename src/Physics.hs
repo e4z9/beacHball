@@ -110,16 +110,13 @@ checkCollisionCircleCircle ((x2, y2), r2) ((x1, y1), r1) =
 checkCollision :: (Moving o1, Moving o2) => o2 -> o1 -> Maybe ((Float, Float), o1)
 checkCollision o2 o1 =
   case (collisionShape o1, collisionShape o2) of
-    (CollisionCircle c, CollisionLine l) -> do
-      (normal, (dx, dy)) <- checkCollisionCircleLine l c
-      let newc = over xPos (+dx) . over yPos (+dy) $ o1
-      return (normal, newc)
-    (CollisionLine l, CollisionCircle c) -> Nothing
-    (CollisionCircle c1, CollisionCircle c2) -> do
-      (normal, (dx, dy)) <- checkCollisionCircleCircle c2 c1
-      let new1 = over xPos (+dx) . over yPos (+dy) $ o1
-      return (normal, new1)
+    (CollisionCircle c, CollisionLine l) ->
+      checkCollisionCircleLine l c >>= restrict
+    (CollisionCircle c1, CollisionCircle c2) ->
+      checkCollisionCircleCircle c2 c1 >>= restrict
     _ -> Nothing
+  where
+    restrict (normal, (dx, dy)) = return (normal, over xPos (+dx) . over yPos (+dy) $ o1)
 
 bounce :: (Moving o1, Moving o2) => Float -> (Float, Float) -> o2 -> o1 -> o1
 bounce coeff (nx, ny) o2 o1 = set xVel (nv1' * nx + tv1' * tx) .
