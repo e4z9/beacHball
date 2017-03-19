@@ -9,6 +9,7 @@ import Paths_beacHball
 
 import Control.Arrow
 import Control.Lens
+import Control.Monad
 import Data.Maybe
 import qualified SDL
 import System.Random
@@ -92,6 +93,9 @@ data GameScene = GameScene {
   _ground :: Object,
   _leftWall :: Object,
   _rightWall :: Object,
+  _backPole :: Object,
+  _net :: Object,
+  _frontPole :: Object,
   _sun :: GraphicsItem,
   _clouds :: [Object],
   _background :: GraphicsItem,
@@ -106,9 +110,12 @@ instance Scene GameScene where
     f (view sun s) *>
     forOf_ (clouds . traverse . objItem) s f *>
     f (view background s) *>
+    f (view (backPole . objItem) s) *>
+    f (view (net . objItem) s) *>
     f (view (ball . ballObject . objItem) s) *>
     f (view (player1 . playerObject . objItem) s) *>
     f (view (player2 . playerObject . objItem) s) *>
+    f (view (frontPole . objItem) s) *>
     pure ()
   clearColor _ = SDL.V4 155 220 255 255
 
@@ -205,6 +212,9 @@ createClouds r w h = do
 startScene :: SDL.Window -> SDL.Renderer -> IO GameScene
 startScene window renderer = do
   windowConfig <- SDL.getWindowConfig window
+  let getPoleSprite = return . RenderSprite . set anchor AnchorBottomMid <=< sprite renderer <=< getDataFileName
+  poleSprite <- getPoleSprite "pole.png"
+  poleBackSprite <- getPoleSprite "pole_back.png"
   let (SDL.V2 wi hi) = SDL.windowInitialSize windowConfig
       width = fromIntegral wi
       height = fromIntegral hi
@@ -216,10 +226,25 @@ startScene window renderer = do
       rightWall = set xPos width .
                   set objCollisionShape (const $ CollisionLine ((width, 0), (-1, 0)))
                   $ object
+      poleDistance = height / 7
+      (netX, netY, netHeight) = (width / 2, base, -265)
+      net = set objCollisionShape (const $ CollisionLineSegment ((netX, netY), (netX, netY + netHeight))) .
+            set (objItem . itemRenderItem) (RenderLine (LineInfo (0, netHeight - poleDistance / 2 + 10) (SDL.V4 120 120 120 255))) .
+            set xPos netX .
+            set yPos netY
+            $ object
+      backPole = set yPos (netY - poleDistance / 2) .
+                 set xPos netX .
+                 set (objItem . itemRenderItem) poleBackSprite
+                 $ object
+      frontPole = set yPos (netY + poleDistance / 2) .
+                 set xPos netX .
+                 set (objItem . itemRenderItem) poleSprite
+                 $ object
   p1 <- createPlayer1 renderer width base
   p2 <- createPlayer2 renderer width base
   sun <- createSun renderer width
   bg <- createBackground renderer width height
   clouds <- createClouds renderer width height
   ball <- createBall renderer width height
-  return $ GameScene width height base ground leftWall rightWall sun clouds bg ball p1 p2
+  return $ GameScene width height base ground leftWall rightWall backPole net frontPole sun clouds bg ball p1 p2

@@ -12,11 +12,13 @@ type Velocity = Float
 type Radius = Float
 type Circle = ((Position, Position), Radius) -- mid point, radius
 type Line = ((Position, Position), (Position, Position)) -- point, normal
+type LineSegment = ((Position, Position), (Position, Position)) -- point, point
 
 data CollisionShape =
   CollisionNone |
   CollisionCircle Circle |
-  CollisionLine Line
+  CollisionLine Line |
+  CollisionLineSegment LineSegment
   deriving Show
 
 frame :: Lens' m Position -> Lens' m Velocity -> Lens' m (Position, Velocity)
@@ -74,6 +76,28 @@ moveWithGravityStep dt obj =
 moveWithGravityLenses :: (Foldable f, Moving o) => Float -> f (ASetter' s o) -> s -> s
 moveWithGravityLenses dt setters s = foldr (`over` moveWithGravityStep dt) s setters
 
+checkCollisionCircleLineSegment :: Line -> Circle -> Maybe ((Float, Float), (Float, Float))
+checkCollisionCircleLineSegment ((ax, ay), (bx, by)) ((cx, cy), cr) =
+  if isColliding then Just (normal, (dx, dy))
+                 else Nothing
+  where
+    -- nearest point on line is Pt = <C-A, B-A>/<B-A, B-A> * (B-A) + A
+    -- nearest point on segment is found by restricting the factor before (B-A) to [0,1]
+    -- collisiont happens if distance of C to nearest point on line segment is < r
+    -- normal is normalized vector from nearest point on line segment to C
+    (abx, aby) = (bx - ax, by - ay)
+    l = abx * abx + aby * aby
+    dot = (cx - ax) * abx + (cy - ay) * aby
+    factor = if l > 0.001 then min 1 . max 0 $ dot / l else 0
+    (px, py) = (factor * abx + ax, factor * aby + ay)
+    (pcx, pcy) = (cx - px, cy - py)
+    d = sqrt (pcx * pcx + pcy * pcy)
+    isColliding = d < cr - 0.001
+    normal@(nx, ny) = if d > 0.001 then (pcx / d, pcy / d)
+                                   else (0, -1) -- pathological case, just point up
+    correctionDistance = cr - d
+    (dx, dy) = (correctionDistance * nx, correctionDistance * ny)
+
 checkCollisionCircleLine :: Line -> Circle -> Maybe ((Float, Float), (Float, Float))
 checkCollisionCircleLine ((lx, ly), (nx, ny)) ((cx, cy), cr) =
   if isColliding then Just ((nx, ny), (dx, dy))
@@ -114,6 +138,8 @@ checkCollision o2 o1 =
       checkCollisionCircleLine l c >>= restrict
     (CollisionCircle c1, CollisionCircle c2) ->
       checkCollisionCircleCircle c2 c1 >>= restrict
+    (CollisionCircle c, CollisionLineSegment l) ->
+      checkCollisionCircleLineSegment l c >>= restrict
     _ -> Nothing
   where
     restrict (normal, (dx, dy)) = return (normal, over xPos (+dx) . over yPos (+dy) $ o1)

@@ -13,14 +13,16 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 data-dir:     data
-data-files:   potato_sml.png
-            , background.png
+data-files:   background.png
             , ball.png
             , cloud1.png
             , cloud2.png
             , cloud3.png
             , cloud4.png
             , cloud5.png
+            , pole.png
+            , pole_back.png
+            , potato_sml.png
             , sun.png
 
 extra-source-files:   README.md
@@ -30,6 +32,7 @@ extra-source-files:   README.md
                     , data/src/cloud3.png
                     , data/src/cloud4.png
                     , data/src/cloud5.png
+                    , data/src/pole.png
                     , data/src/potato.png
 
 executable beacHball

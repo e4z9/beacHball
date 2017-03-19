@@ -66,7 +66,7 @@ groundC = 2 / 3
 playerC = 1 / 5
 
 handleBallCollision :: GameScene -> GameScene
-handleBallCollision = collideLenses setRandomAV wallC ball [leftWall, rightWall] .
+handleBallCollision = collideLenses setRandomAV wallC ball [leftWall, rightWall, net] .
                       collideLenses slowAV groundC ball [ground] .
                       collideLenses id playerC ball [player1, player2]
   where slowAV = over ballAV (* groundC)
