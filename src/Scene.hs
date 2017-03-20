@@ -147,15 +147,21 @@ setRandomAV b =
       av' = if view xVel b' < 0 then -av else av
   in  set ballAV av' b'
 
+resetBall :: Float -> Float -> Ball -> Ball
+resetBall width height b =
+  let (xv, b') = ballRandomR (-800, 800) b
+  in  set xPos (width / 2) .
+      set yPos (height / 3) .
+      set xVel xv .
+      set yVel 0
+      $ setRandomAV b
+
 createBall :: SDL.Renderer -> Float -> Float -> IO Ball
 createBall r width height = do
   item <- graphicsSpriteItem r =<< getDataFileName "ball.png"
   rgen <- newStdGen
-  xv <- randomRIO (-40, 40)
   let ball = Ball rgen 0 object
-  return $ set xPos (width - width / 3) .
-           set yPos (height / 3) .
-           set xVel (xv * 20) .
+  return $ resetBall width height $
            set (ballObject . objGravity) (sceneGravity / 2) .
            set (ballObject . objItem . unsafeSprite . spriteTransform) (Just $ SpriteTransform 0 (False, False)) .
            set (ballObject . objCollisionShape) (collisionCircle . view objItem) .

@@ -19,8 +19,8 @@ playerSpeed = 200
 
 updatePlayerXV :: Keys -> Player -> Player
 updatePlayerXV keys player =
-  let left  = isScancodePressed (view leftKey player) keys
-      right = isScancodePressed (view rightKey player) keys
+  let left  = isScancodeDown (view leftKey player) keys
+      right = isScancodeDown (view rightKey player) keys
       v | left && right = 0
         | left          = -playerSpeed
         | right         = playerSpeed
@@ -43,7 +43,7 @@ moveWithGravity = mkPure $ \ds (setters, g) ->
 updatePlayerYV :: Position -> Keys -> Player -> Player
 updatePlayerYV baseY keys player =
   let canJump = view yVel player == 0 && view yPos player >= baseY
-      wantJump = isScancodePressed (view upKey player) keys
+      wantJump = isScancodeDown (view upKey player) keys
       player' = if canJump && wantJump then set yVel jumpVelocity player
                 else player
   in player'
@@ -78,12 +78,19 @@ updateBall = mkPure $ \ds scene ->
                handleBallCollision $ scene
   in (Right scene', updateBall)
 
+handleResetBall :: Keys -> GameScene -> GameScene
+handleResetBall keys s@GameScene{_width=width, _height=height} =
+  if isScancodePressed SDL.ScancodeR keys
+    then over ball (resetBall width height) s
+    else s
+
 handleInput :: Keys -> GameScene -> GameScene
 handleInput keys scene =
   let playerBase = view baseY scene
       updatePlayerV = updatePlayerXV keys . updatePlayerYV playerBase keys
   in  over player1 updatePlayerV .
-      over player2 updatePlayerV $ scene
+      over player2 updatePlayerV
+      $ handleResetBall keys scene
 
 logic :: (HasTime t s, Monad m) => GameScene -> Wire s () m (GameScene, [SDL.Event]) GameScene
 logic startScene = proc (scene, events) -> do
