@@ -50,10 +50,8 @@ updatePlayerYV baseY keys player =
 
 restrictPlayerPos :: Position -> Player -> Player
 restrictPlayerPos baseY player =
-  let (minX, maxX) = view playerHBounds player
-      restrictToBase (p, v) = if p >= baseY then (baseY, 0) else (p, v)
-  in over xPos (bounded minX maxX) .
-     over yFrame restrictToBase $ player
+  let restrictToBase (p, v) = if p >= baseY then (baseY, 0) else (p, v)
+  in over yFrame restrictToBase player
 
 wrap :: Float -> Float -> Float -> Float
 wrap mini maxi p
@@ -65,17 +63,18 @@ wallC = 1
 groundC = 2 / 3
 playerC = 1 / 5
 
-handleBallCollision :: GameScene -> GameScene
-handleBallCollision = collideLenses setRandomAV wallC ball [leftWall, rightWall, net] .
-                      collideLenses slowAV groundC ball [ground] .
-                      collideLenses id playerC ball [player1, player2]
+handleCollisions :: GameScene -> GameScene
+handleCollisions = collideLenses setRandomAV wallC ball [leftWall, rightWall, net] .
+                   collideLenses slowAV groundC ball [ground] .
+                   collideLenses id playerC ball [player1, player2] .
+                   collideLenses id 1 player1 [leftWall, rightWall, net] .
+                   collideLenses id 1 player2 [leftWall, rightWall, net]
   where slowAV = over ballAV (* groundC)
 
 updateBall :: HasTime t s => Wire s e m GameScene GameScene
 updateBall = mkPure $ \ds scene ->
   let dt = realToFrac $ dtime ds
-      scene' = over (ball . ballAFrame) (moveFrame dt) .
-               handleBallCollision $ scene
+      scene' = over (ball . ballAFrame) (moveFrame dt) scene
   in (Right scene', updateBall)
 
 handleResetBall :: Keys -> GameScene -> GameScene
@@ -103,7 +102,8 @@ logic startScene = proc (scene, events) -> do
                                  ball . ballObject], scene1)
   let w = view width startScene
       base = view baseY startScene
-      scene3 = over player1 (restrictPlayerPos base) .
+      scene3 = handleCollisions .
+               over player1 (restrictPlayerPos base) .
                over player2 (restrictPlayerPos base) .
                over clouds (map (over xPos (wrap (-w/2) w)))
                $ scene2
