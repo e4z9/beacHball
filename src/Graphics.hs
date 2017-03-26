@@ -112,7 +112,7 @@ loadTexture renderer path = do
   return (tex2, fromIntegral w, fromIntegral h)
 
 renderSprite :: MonadIO m => SDL.Renderer -> Position -> Position -> Sprite -> m ()
-renderSprite r x y sprite = do
+renderSprite r x y sprite =
   let (xp, yp) = spriteTopLeft x y sprite
       xi = fromIntegral $ round xp
       yi = fromIntegral $ round yp
@@ -121,7 +121,7 @@ renderSprite r x y sprite = do
       hi = fromIntegral $ view h sprite
       targetRect = Just $ SDL.Rectangle (SDL.P (SDL.V2 xi yi)) (SDL.V2 wi hi)
       trans = view spriteTransform sprite
-  maybe
+  in maybe
     (SDL.copy r tex Nothing targetRect)
     (\t -> SDL.copyEx r tex Nothing targetRect
       (realToFrac $ view transformAngle t) Nothing
