@@ -62,19 +62,11 @@ instance Moving Ball where
   gravity = gravity . view ballObject
   collisionShape = collisionShape . view ballObject
 
-unsafeSprite :: Lens' GraphicsItem Sprite
-unsafeSprite = lens unsafeGetSprite (\item s -> set itemRenderItem (RenderSprite s) item)
-  where
-    unsafeGetSprite item = case view itemRenderItem item of
-      RenderSprite s -> s
-      _ -> undefined
-
-
 -- ball must have sprite and transformation
 ballA :: Lens' Ball Float
-ballA = lens (view transformAngle . fromJust . view (ballObject . objItem . unsafeSprite . spriteTransform))
-             (\b a -> set (ballObject . objItem . unsafeSprite . spriteTransform)
-                          (Just (set transformAngle a (fromJust $ view (ballObject . objItem . unsafeSprite . spriteTransform) b)))
+ballA = lens (fromJust . preview (ballObject . objItem . itemRenderItem . _RenderSprite . spriteTransform . _Just . transformAngle))
+             (\b a -> set (ballObject . objItem . itemRenderItem . _RenderSprite . spriteTransform)
+                          (Just (set transformAngle a (fromJust $ preview (ballObject . objItem . itemRenderItem . _RenderSprite . spriteTransform . _Just) b)))
                           b)
 
 ballAFrame :: Lens' Ball (Float, Float)
@@ -122,12 +114,11 @@ createPlayer :: SDL.Renderer -> Float -> SDL.Scancode -> SDL.Scancode -> SDL.Sca
                 -> IO Player
 createPlayer r base left right up = do
   item <- graphicsSpriteItem r =<< getDataFileName "potato_sml.png"
-  let halfSpriteW = fromIntegral (view (unsafeSprite . w) item) / 2
-      player = Player left right up object
+  let player = Player left right up object
   return $ set yPos base .
            set (playerObject . objGravity) sceneGravity .
            set (playerObject . objCollisionShape) (collisionCircle . view objItem) .
-           set (playerObject . objItem . unsafeSprite . anchor) AnchorBottomMid .
+           set (playerObject . objItem . itemRenderItem . _RenderSprite . anchor) AnchorBottomMid .
            set (playerObject . objItem) item
            $ player
 
@@ -137,7 +128,8 @@ createPlayer1 r width base = set xPos (width / 4)
 
 createPlayer2 :: SDL.Renderer -> Float -> Float -> IO Player
 createPlayer2 r width base =
-  set (playerObject . objItem . unsafeSprite . spriteTransform) (Just $ SpriteTransform 0 (True, False)) .
+  set (playerObject . objItem . itemRenderItem . _RenderSprite . spriteTransform)
+      (Just $ SpriteTransform 0 (True, False)) .
   set xPos (width * 3 / 4)
   <$> createPlayer r base SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp
 
@@ -163,7 +155,8 @@ createBall r width height = do
   let ball = Ball rgen 0 object
   return $ resetBall width height $
            set (ballObject . objGravity) (sceneGravity / 2) .
-           set (ballObject . objItem . unsafeSprite . spriteTransform) (Just $ SpriteTransform 0 (False, False)) .
+           set (ballObject . objItem . itemRenderItem . _RenderSprite . spriteTransform)
+               (Just $ SpriteTransform 0 (False, False)) .
            set (ballObject . objCollisionShape) (collisionCircle . view objItem) .
            set (ballObject . objItem) item
            $ setRandomAV ball
@@ -171,7 +164,10 @@ createBall r width height = do
 createSun :: SDL.Renderer -> Float -> IO GraphicsItem
 createSun r w = do
   item <- graphicsSpriteItem r =<< getDataFileName "sun.png"
-  return $ set xPos (3 * w / 4) . set yPos 0 . set (unsafeSprite . anchor) AnchorTopMid $ item
+  return $ set xPos (3 * w / 4) .
+           set yPos 0 .
+           set (itemRenderItem . _RenderSprite . anchor) AnchorTopMid
+           $ item
 
 createBackground :: SDL.Renderer -> Float -> Float -> IO GraphicsItem
 createBackground r w h = do
@@ -190,7 +186,7 @@ createCloud r w h path = do
   xp <- randomRIO (- w / 2, w)
   yp <- randomRIO (0, h / 4)
   v <- randomRIO (2, 40)
-  return $ set (objItem . unsafeSprite . anchor) AnchorTopLeft .
+  return $ set (objItem . itemRenderItem . _RenderSprite . anchor) AnchorTopLeft .
            set xPos xp .
            set yPos yp .
            set xVel v .

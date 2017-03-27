@@ -51,6 +51,7 @@ data RenderItem =
   RenderNothing |
   RenderSprite Sprite |
   RenderLine LineInfo
+makePrisms ''RenderItem
 
 data GraphicsItem = GraphicsItem {
   _itemX :: Position,
