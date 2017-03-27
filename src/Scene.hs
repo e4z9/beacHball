@@ -17,15 +17,16 @@ import System.Random
 sceneGravity = 2500
 
 -- Circle with radius = width and located at top of sprite
-collisionCircle :: GraphicsItem -> CollisionShape
-collisionCircle item =
-  case view itemRenderItem item of
-    RenderSprite s ->
-      let r = fromIntegral (view w s) / 2
-          (x, y) = (view itemX item, view itemY item)
-          (sx, sy) = spriteTopLeft x y s
-      in CollisionCircle ((sx + r, sy + r), r)
-    _ -> CollisionNone
+circleForSprite :: Position -> Position -> Sprite -> CollisionShape
+circleForSprite x y s = CollisionCircle ((sx + r, sy + r), r)
+  where
+    r = fromIntegral (view w s) / 2
+    (sx, sy) = spriteTopLeft x y s
+collisionCircle :: GraphicsItem -> Maybe CollisionShape
+collisionCircle item = circleForSprite x y <$>
+                       preview itemSprite item
+  where
+    (x, y) = (view itemX item, view itemY item)
 
 data Player = Player {
   _leftKey :: SDL.Scancode,
@@ -64,7 +65,7 @@ instance Moving Ball where
 
 -- ball must have sprite and transformation
 ballA :: Traversal' Ball Float
-ballA = ballObject . objItem . itemRenderItem . _RenderSprite . spriteTransform . _Just . transformAngle
+ballA = ballObject . objItem . itemSprite . spriteTransform . _Just . transformAngle
 
 -- Traversal' Ball (Float, Float) = forall f. Applicative f => ((Float, Float) -> f (Float, Float)) -> s -> f s
 ballAFrame :: Traversal' Ball (Float, Float)
@@ -119,7 +120,7 @@ createPlayer r base left right up = do
   return $ set yPos base .
            set (playerObject . objGravity) sceneGravity .
            set (playerObject . objCollisionShape) (collisionCircle . view objItem) .
-           set (playerObject . objItem . itemRenderItem . _RenderSprite . anchor) AnchorBottomMid .
+           set (playerObject . objItem . itemSprite . anchor) AnchorBottomMid .
            set (playerObject . objItem) item
            $ player
 
@@ -129,7 +130,7 @@ createPlayer1 r width base = set xPos (width / 4)
 
 createPlayer2 :: SDL.Renderer -> Float -> Float -> IO Player
 createPlayer2 r width base =
-  set (playerObject . objItem . itemRenderItem . _RenderSprite . spriteTransform)
+  set (playerObject . objItem . itemSprite . spriteTransform)
       (Just $ SpriteTransform 0 (True, False)) .
   set xPos (width * 3 / 4)
   <$> createPlayer r base SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp
@@ -156,7 +157,7 @@ createBall r width height = do
   let ball = Ball rgen 0 object
   return $ resetBall width height $
            set (ballObject . objGravity) (sceneGravity / 2) .
-           set (ballObject . objItem . itemRenderItem . _RenderSprite . spriteTransform)
+           set (ballObject . objItem . itemSprite . spriteTransform)
                (Just $ SpriteTransform 0 (False, False)) .
            set (ballObject . objCollisionShape) (collisionCircle . view objItem) .
            set (ballObject . objItem) item
@@ -167,7 +168,7 @@ createSun r w = do
   item <- graphicsSpriteItem r =<< getDataFileName "sun.png"
   return $ set xPos (3 * w / 4) .
            set yPos 0 .
-           set (itemRenderItem . _RenderSprite . anchor) AnchorTopMid
+           set (itemSprite . anchor) AnchorTopMid
            $ item
 
 createBackground :: SDL.Renderer -> Float -> Float -> IO GraphicsItem
@@ -179,7 +180,7 @@ createBackground r w h = do
       th = fromIntegral thi :: Float
       (sw, sh) = (round w, round (th * w / tw))
       sprite = Sprite tex AnchorBottomMid sw sh Nothing
-  return $ GraphicsItem xp yp (RenderSprite sprite)
+  return $ GraphicsItem xp yp (Just $ RenderSprite sprite)
 
 createCloud :: SDL.Renderer -> Float -> Float -> FilePath -> IO Object
 createCloud r w h path = do
@@ -187,7 +188,7 @@ createCloud r w h path = do
   xp <- randomRIO (- w / 2, w)
   yp <- randomRIO (0, h / 4)
   v <- randomRIO (2, 40)
-  return $ set (objItem . itemRenderItem . _RenderSprite . anchor) AnchorTopLeft .
+  return $ set (objItem . itemSprite . anchor) AnchorTopLeft .
            set xPos xp .
            set yPos yp .
            set xVel v .
@@ -203,23 +204,23 @@ startScene :: SDL.Window -> SDL.Renderer -> IO GameScene
 startScene window renderer = do
   windowConfig <- SDL.getWindowConfig window
   let getPoleSprite = return . RenderSprite . set anchor AnchorBottomMid <=< sprite renderer <=< getDataFileName
-  poleSprite <- getPoleSprite "pole.png"
-  poleBackSprite <- getPoleSprite "pole_back.png"
+  poleSprite <- Just <$> getPoleSprite "pole.png"
+  poleBackSprite <- Just <$> getPoleSprite "pole_back.png"
   let (SDL.V2 wi hi) = SDL.windowInitialSize windowConfig
       width = fromIntegral wi
       height = fromIntegral hi
       base = height - height / 7
       ground = set yPos base .
-               set objCollisionShape (const $ CollisionLine ((0, base), (0, -1)))
+               set objCollisionShape (const . Just $ CollisionLine ((0, base), (0, -1)))
                $ object
-      leftWall = set objCollisionShape (const $ CollisionLine ((0, 0), (1, 0))) object
+      leftWall = set objCollisionShape (const . Just $ CollisionLine ((0, 0), (1, 0))) object
       rightWall = set xPos width .
-                  set objCollisionShape (const $ CollisionLine ((width, 0), (-1, 0)))
+                  set objCollisionShape (const . Just $ CollisionLine ((width, 0), (-1, 0)))
                   $ object
       poleDistance = height / 7
       (netX, netY, netHeight) = (width / 2, base, -265)
-      net = set objCollisionShape (const $ CollisionLineSegment ((netX, netY), (netX, netY + netHeight))) .
-            set (objItem . itemRenderItem) (RenderLine (LineInfo (0, netHeight - poleDistance / 2 + 10) (SDL.V4 120 120 120 255))) .
+      net = set objCollisionShape (const . Just $ CollisionLineSegment ((netX, netY), (netX, netY + netHeight))) .
+            set (objItem . itemRenderItem) (Just $ RenderLine (LineInfo (0, netHeight - poleDistance / 2 + 10) (SDL.V4 120 120 120 255))) .
             set xPos netX .
             set yPos netY
             $ object

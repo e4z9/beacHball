@@ -15,7 +15,6 @@ type Line = ((Position, Position), (Position, Position)) -- point, normal
 type LineSegment = ((Position, Position), (Position, Position)) -- point, point
 
 data CollisionShape =
-  CollisionNone |
   CollisionCircle Circle |
   CollisionLine Line |
   CollisionLineSegment LineSegment
@@ -34,20 +33,20 @@ class Located m => Moving m where
   yFrame = frame yPos yVel
   gravity :: m -> Float
   gravity = const 0
-  collisionShape :: m -> CollisionShape
-  collisionShape = const CollisionNone
+  collisionShape :: m -> Maybe CollisionShape
+  collisionShape = const Nothing
 
 data Object = Object {
   _objItem :: GraphicsItem,
   _objXVel :: Velocity,
   _objYVel :: Velocity,
   _objGravity :: Float,
-  _objCollisionShape :: Object -> CollisionShape
+  _objCollisionShape :: Object -> Maybe CollisionShape
 }
 makeLenses ''Object
 
 object :: Object
-object = Object graphicsItem 0 0 0 (const CollisionNone)
+object = Object graphicsItem 0 0 0 (const Nothing)
 
 instance Located Object where
   xPos = objItem . xPos
@@ -132,8 +131,10 @@ checkCollisionCircleCircle ((x2, y2), r2) ((x1, y1), r1) =
     (dx, dy) = (correctionDistance * nx, correctionDistance * ny)
 
 checkCollision :: (Moving o1, Moving o2) => o2 -> o1 -> Maybe ((Float, Float), o1)
-checkCollision o2 o1 =
-  case (collisionShape o1, collisionShape o2) of
+checkCollision o2 o1 = do
+  shape1 <- collisionShape o1
+  shape2 <- collisionShape o2
+  case (shape1, shape2) of
     (CollisionCircle c, CollisionLine l) ->
       checkCollisionCircleLine l c >>= restrict
     (CollisionCircle c1, CollisionCircle c2) ->

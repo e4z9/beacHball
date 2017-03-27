@@ -48,7 +48,6 @@ makeLenses ''Sprite
 data LineInfo = LineInfo (Position, Position) (SDL.V4 Word8) -- (dx, dy) color
 
 data RenderItem =
-  RenderNothing |
   RenderSprite Sprite |
   RenderLine LineInfo
 makePrisms ''RenderItem
@@ -56,9 +55,11 @@ makePrisms ''RenderItem
 data GraphicsItem = GraphicsItem {
   _itemX :: Position,
   _itemY :: Position,
-  _itemRenderItem :: RenderItem
+  _itemRenderItem :: Maybe RenderItem
 }
 makeLenses ''GraphicsItem
+itemSprite :: Traversal' GraphicsItem Sprite
+itemSprite = itemRenderItem . _Just . _RenderSprite
 
 instance Located GraphicsItem where
   xPos = itemX
@@ -69,11 +70,11 @@ class Scene s where
   clearColor :: s -> SDL.V4 Word8
 
 graphicsItem :: GraphicsItem
-graphicsItem = GraphicsItem 0 0 RenderNothing
+graphicsItem = GraphicsItem 0 0 Nothing
 
 graphicsSpriteItem :: MonadIO m => SDL.Renderer -> FilePath -> m GraphicsItem
 graphicsSpriteItem renderer texturePath = do
-  s <- RenderSprite <$> sprite renderer texturePath
+  s <- Just . RenderSprite <$> sprite renderer texturePath
   return $ set itemRenderItem s graphicsItem
 
 sprite :: MonadIO m => SDL.Renderer -> FilePath -> m Sprite
@@ -139,13 +140,12 @@ renderLine r x y (LineInfo (dx, dy) color) = do
   SDL.drawLine r (SDL.P (SDL.V2 xi1 yi1)) (SDL.P (SDL.V2 xi2 yi2))
 
 renderItem :: MonadIO m => SDL.Renderer -> GraphicsItem -> m ()
-renderItem r item =
-  let x = view itemX item
-      y = view itemY item
-  in  case view itemRenderItem item of
-        RenderSprite sprite -> renderSprite r x y sprite
-        RenderLine line     -> renderLine r x y line
-        RenderNothing       -> return ()
+renderItem r item = mapM_ renderActualItem (view itemRenderItem item)
+  where
+    x = view itemX item
+    y = view itemY item
+    renderActualItem (RenderSprite sprite) = renderSprite r x y sprite
+    renderActualItem (RenderLine line)     = renderLine r x y line
 
 render :: (MonadIO m, Scene s) => SDL.Renderer -> s -> m ()
 render r scene = do
