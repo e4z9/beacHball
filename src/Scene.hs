@@ -63,14 +63,15 @@ instance Moving Ball where
   collisionShape = collisionShape . view ballObject
 
 -- ball must have sprite and transformation
-ballA :: Lens' Ball Float
-ballA = lens (fromJust . preview (ballObject . objItem . itemRenderItem . _RenderSprite . spriteTransform . _Just . transformAngle))
-             (\b a -> set (ballObject . objItem . itemRenderItem . _RenderSprite . spriteTransform)
-                          (Just (set transformAngle a (fromJust $ preview (ballObject . objItem . itemRenderItem . _RenderSprite . spriteTransform . _Just) b)))
-                          b)
+ballA :: Traversal' Ball Float
+ballA = ballObject . objItem . itemRenderItem . _RenderSprite . spriteTransform . _Just . transformAngle
 
-ballAFrame :: Lens' Ball (Float, Float)
-ballAFrame = frame ballA ballAV
+-- Traversal' Ball (Float, Float) = forall f. Applicative f => ((Float, Float) -> f (Float, Float)) -> s -> f s
+ballAFrame :: Traversal' Ball (Float, Float)
+ballAFrame g ball = maybe (pure ball) (fmap setAFrame . g) getAFrame
+ where
+   getAFrame = (,) <$> preview ballA ball <*> Just (view ballAV ball)
+   setAFrame (a, av) = set ballA a . set ballAV av $ ball
 
 ballRandomR :: Random a => (a, a) -> Ball -> (a, Ball)
 ballRandomR range b =
