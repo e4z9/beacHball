@@ -48,11 +48,6 @@ updatePlayerYV baseY keys player =
                 else player
   in player'
 
-restrictPlayerPos :: Position -> Player -> Player
-restrictPlayerPos baseY player =
-  let restrictToBase (p, v) = if p >= baseY then (baseY, 0) else (p, v)
-  in over yFrame restrictToBase player
-
 wrap :: Float -> Float -> Float -> Float
 wrap mini maxi p
   | p > maxi  = mini + p - maxi
@@ -68,7 +63,9 @@ handleCollisions = collideLenses setRandomAV wallC ball [leftWall, rightWall, ne
                    collideLenses slowAV groundC ball [ground] .
                    collideLenses id playerC ball [player1, player2] .
                    collideLenses id 1 player1 [leftWall, rightWall, net] .
-                   collideLenses id 1 player2 [leftWall, rightWall, net]
+                   collideLenses id 1 player2 [leftWall, rightWall, net] .
+                   collideLenses (set yVel 0) 1 player1 [ground] .
+                   collideLenses (set yVel 0) 1 player2 [ground]
   where slowAV = over ballAV (* groundC)
 
 updateBall :: HasTime t s => Wire s e m GameScene GameScene
@@ -103,8 +100,6 @@ logic startScene = proc (scene, events) -> do
   let w = view width startScene
       base = view baseY startScene
       scene3 = handleCollisions .
-               over player1 (restrictPlayerPos base) .
-               over player2 (restrictPlayerPos base) .
                over clouds (map (over xPos (wrap (-w/2) w)))
                $ scene2
   updateBall -< scene3
