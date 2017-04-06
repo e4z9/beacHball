@@ -76,7 +76,7 @@ updateBall = mkPure $ \ds scene ->
 
 handleResetBall :: Keys -> GameScene -> GameScene
 handleResetBall keys s@GameScene{_width=width, _height=height} =
-  if isScancodePressed SDL.ScancodeR keys
+  if isScancodePressed SDL.ScancodeN keys
     then over ball (resetBall width height) s
     else s
 

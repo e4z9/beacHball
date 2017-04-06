@@ -12,6 +12,8 @@ import Control.Lens
 import Control.Monad
 import Data.Maybe
 import qualified SDL
+import SDL.TTF as TTF
+import SDL.TTF.FFI as TTF.FFI
 import System.Random
 
 sceneGravity = 2500
@@ -94,7 +96,8 @@ data GameScene = GameScene {
   _background :: GraphicsItem,
   _ball :: Ball,
   _player1 :: Player,
-  _player2 :: Player
+  _player2 :: Player,
+  _menuItems :: [GraphicsItem]
 }
 makeLenses ''GameScene
 
@@ -109,6 +112,7 @@ instance Scene GameScene where
     f (view (player1 . playerObject . objItem) s) *>
     f (view (player2 . playerObject . objItem) s) *>
     f (view (frontPole . objItem) s) *>
+    forOf_ (menuItems . traverse) s f *>
     pure ()
   clearColor _ = SDL.V4 155 220 255 255
 
@@ -234,19 +238,28 @@ createPole renderer width height base = do
                  $ object
   return (backPole, net, frontPole)
 
+createMenu :: SDL.Renderer -> TTF.FFI.TTFFont -> Float -> Float -> IO [GraphicsItem]
+createMenu renderer font width height = do
+  newBall <- graphicsTextItem renderer font (SDL.V4 0 0 0 255) "N: Neuer Ball"
+  return [set (itemSprite . anchor) AnchorTopRight . set xPos (width - 10) . set yPos 10 $ newBall]
+
 startScene :: SDL.Window -> SDL.Renderer -> IO GameScene
-startScene window renderer = do
-  windowConfig <- SDL.getWindowConfig window
-  let (SDL.V2 wi hi) = SDL.windowInitialSize windowConfig
-      width = fromIntegral wi
-      height = fromIntegral hi
-      base = height - height / 7
-      (ground, leftWall, rightWall) = createBounds width base
-  (backPole, net, frontPole) <- createPole renderer width height base
-  p1 <- createPlayer1 renderer width base
-  p2 <- createPlayer2 renderer width base
-  sun <- createSun renderer width
-  bg <- createBackground renderer width height
-  clouds <- createClouds renderer width height
-  ball <- createBall renderer width height
-  return $ GameScene width height base ground leftWall rightWall backPole net frontPole sun clouds bg ball p1 p2
+startScene window renderer =
+  TTF.withInit $ do
+    menuFont <- flip TTF.openFont 18 =<< getDataFileName "jellee-typeface/Jellee-Roman.ttf"
+    windowConfig <- SDL.getWindowConfig window
+    let (SDL.V2 wi hi) = SDL.windowInitialSize windowConfig
+        width = fromIntegral wi
+        height = fromIntegral hi
+        base = height - height / 7
+        (ground, leftWall, rightWall) = createBounds width base
+    (backPole, net, frontPole) <- createPole renderer width height base
+    p1 <- createPlayer1 renderer width base
+    p2 <- createPlayer2 renderer width base
+    sun <- createSun renderer width
+    bg <- createBackground renderer width height
+    clouds <- createClouds renderer width height
+    ball <- createBall renderer width height
+    menu <- createMenu renderer menuFont width height
+    return $ GameScene width height base ground leftWall rightWall backPole net frontPole
+                       sun clouds bg ball p1 p2 menu

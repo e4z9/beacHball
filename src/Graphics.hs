@@ -11,6 +11,10 @@ import qualified Data.Vector.Storable as V
 import Data.Word
 import Foreign.C.Types
 import qualified SDL
+import qualified SDL.Raw
+import SDL.TTF as TTF
+import SDL.TTF.FFI as TTF.FFI
+
 import Prelude hiding ((.))
 
 data Anchor =
@@ -77,10 +81,26 @@ graphicsSpriteItem renderer texturePath = do
   s <- Just . RenderSprite <$> sprite renderer texturePath
   return $ set itemRenderItem s graphicsItem
 
+graphicsTextItem :: MonadIO m => SDL.Renderer -> TTF.FFI.TTFFont ->
+                                 SDL.V4 Word8 -> String -> m GraphicsItem
+graphicsTextItem renderer font color text = do
+  s <- Just . RenderSprite <$> textSprite renderer font color text
+  return $ set itemRenderItem s graphicsItem
+
 sprite :: MonadIO m => SDL.Renderer -> FilePath -> m Sprite
 sprite renderer texturePath = do
   (texture, w, h) <- loadTexture renderer texturePath
   return $ Sprite texture AnchorCenter w h Nothing
+
+textSprite :: MonadIO m => SDL.Renderer -> TTF.FFI.TTFFont -> SDL.V4 Word8 -> String -> m Sprite
+textSprite renderer font (SDL.V4 r g b a) text = do
+  surface <- TTF.renderUTF8Blended font text (SDL.Raw.Color r g b a)
+  texture <- SDL.createTextureFromSurface renderer surface
+  SDL.freeSurface surface
+  texInfo <- SDL.queryTexture texture
+  let w = fromIntegral $ SDL.textureWidth texInfo
+      h = fromIntegral $ SDL.textureHeight texInfo
+  return $ Sprite texture AnchorTopLeft w h Nothing
 
 spriteTopLeft :: Position -> Position -> Sprite -> (Position, Position)
 spriteTopLeft xs ys sprite =

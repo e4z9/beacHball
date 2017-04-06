@@ -20,6 +20,7 @@ data-files:   background.png
             , cloud3.png
             , cloud4.png
             , cloud5.png
+            , jellee-typeface/Jellee-Roman.ttf
             , pole.png
             , pole_back.png
             , potato_sml.png
@@ -27,6 +28,8 @@ data-files:   background.png
 
 extra-source-files:   README.md
                     , stack.yaml
+                    , data/jellee-typeface/Jellee-Roman.otf
+                    , data/jellee-typeface/OFL-FAQ.txt
                     , data/src/cloud1.png
                     , data/src/cloud2.png
                     , data/src/cloud3.png
@@ -52,4 +55,5 @@ executable beacHball
                      , netwire
                      , random
                      , sdl2
+                     , sdl2-ttf
                      , vector
