@@ -200,38 +200,49 @@ createClouds r w h = do
   paths <- mapM getDataFileName ["cloud" ++ show n ++ ".png" | n <- [1..5]]
   mapM (createCloud r w h) paths
 
-startScene :: SDL.Window -> SDL.Renderer -> IO GameScene
-startScene window renderer = do
-  windowConfig <- SDL.getWindowConfig window
+createBounds :: Float -> Float -> (Object, Object, Object)
+createBounds width base = (ground, leftWall, rightWall)
+  where
+    ground = set yPos base .
+             set objCollisionShape (const . Just $ CollisionLine ((0, base), (0, -1)))
+             $ object
+    leftWall = set objCollisionShape (const . Just $ CollisionLine ((0, 0), (1, 0))) object
+    rightWall = set xPos width .
+                set objCollisionShape (const . Just $ CollisionLine ((width, 0), (-1, 0)))
+                $ object
+
+
+createPole :: SDL.Renderer -> Float -> Float -> Float -> IO (Object, Object, Object)
+createPole renderer width height base = do
   let getPoleSprite = return . RenderSprite . set anchor AnchorBottomMid <=< sprite renderer <=< getDataFileName
   poleSprite <- Just <$> getPoleSprite "pole.png"
   poleBackSprite <- Just <$> getPoleSprite "pole_back.png"
-  let (SDL.V2 wi hi) = SDL.windowInitialSize windowConfig
-      width = fromIntegral wi
-      height = fromIntegral hi
-      base = height - height / 7
-      ground = set yPos base .
-               set objCollisionShape (const . Just $ CollisionLine ((0, base), (0, -1)))
-               $ object
-      leftWall = set objCollisionShape (const . Just $ CollisionLine ((0, 0), (1, 0))) object
-      rightWall = set xPos width .
-                  set objCollisionShape (const . Just $ CollisionLine ((width, 0), (-1, 0)))
-                  $ object
-      poleDistance = height / 7
+  let poleDistance = height / 7
       (netX, netY, netHeight) = (width / 2, base, -265)
+      backPole = set yPos (netY - poleDistance / 2) .
+                 set xPos netX .
+                 set (objItem . itemRenderItem) poleBackSprite
+                 $ object
       net = set objCollisionShape (const . Just $ CollisionLineSegment ((netX, netY), (netX, netY + netHeight))) .
             set (objItem . itemRenderItem) (Just $ RenderLine (LineInfo (0, netHeight - poleDistance / 2 + 10) (SDL.V4 120 120 120 255))) .
             set xPos netX .
             set yPos netY
             $ object
-      backPole = set yPos (netY - poleDistance / 2) .
-                 set xPos netX .
-                 set (objItem . itemRenderItem) poleBackSprite
-                 $ object
       frontPole = set yPos (netY + poleDistance / 2) .
                  set xPos netX .
                  set (objItem . itemRenderItem) poleSprite
                  $ object
+  return (backPole, net, frontPole)
+
+startScene :: SDL.Window -> SDL.Renderer -> IO GameScene
+startScene window renderer = do
+  windowConfig <- SDL.getWindowConfig window
+  let (SDL.V2 wi hi) = SDL.windowInitialSize windowConfig
+      width = fromIntegral wi
+      height = fromIntegral hi
+      base = height - height / 7
+      (ground, leftWall, rightWall) = createBounds width base
+  (backPole, net, frontPole) <- createPole renderer width height base
   p1 <- createPlayer1 renderer width base
   p2 <- createPlayer2 renderer width base
   sun <- createSun renderer width
