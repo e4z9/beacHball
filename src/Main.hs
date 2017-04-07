@@ -27,12 +27,6 @@ updatePlayerXV keys player =
         | otherwise     = 0
   in  set xVel v player
 
-bounded :: Ord a => a -> a -> a -> a
-bounded mini maxi a
-  | a <= mini = mini
-  | maxi <= a = maxi
-  | otherwise = a
-
 jumpVelocity = -1000
 
 moveWithGravity :: (HasTime t s, Moving o, Foldable f) => Wire s e m (f (ASetter' g o), g) g
