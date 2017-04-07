@@ -10,6 +10,7 @@ import Paths_beacHball
 import Control.Arrow
 import Control.Lens
 import Control.Monad
+import Control.Monad.Reader
 import Data.Maybe
 import qualified SDL
 import SDL.TTF as TTF
@@ -116,28 +117,39 @@ instance Scene GameScene where
     pure ()
   clearColor _ = SDL.V4 155 220 255 255
 
-createPlayer :: SDL.Renderer -> Float -> SDL.Scancode -> SDL.Scancode -> SDL.Scancode
-                -> IO Player
-createPlayer r base left right up = do
-  item <- graphicsSpriteItem r =<< getDataFileName "potato_sml.png"
+data WindowContext = WindowContext {
+  winWidth :: Float,
+  winHeight :: Float,
+  groundY :: Float,
+  renderer :: SDL.Renderer
+}
+
+type ReaderIO env a = ReaderT env IO a
+
+createPlayer :: SDL.Scancode -> SDL.Scancode -> SDL.Scancode ->
+                (Float -> Float) -> ReaderIO WindowContext Player
+createPlayer left right up xp = do
+  (WindowContext width _ base r) <- ask
+  item <- liftIO $ graphicsSpriteItem r =<< getDataFileName "potato_sml.png"
   let player = Player left right up object
-  return $ set yPos base .
+  return $ set xPos (xp width) .
+           set yPos base .
            set (playerObject . objGravity) sceneGravity .
            set (playerObject . objCollisionShape) (collisionCircle . view objItem) .
            set (playerObject . objItem . itemSprite . anchor) AnchorBottomMid .
            set (playerObject . objItem) item
            $ player
 
-createPlayer1 :: SDL.Renderer -> Float -> Float -> IO Player
-createPlayer1 r width base = set xPos (width / 4)
-  <$> createPlayer r base SDL.ScancodeA SDL.ScancodeD SDL.ScancodeW
+createPlayer1 :: ReaderIO WindowContext Player
+createPlayer1 = createPlayer SDL.ScancodeA SDL.ScancodeD SDL.ScancodeW xp
+  where xp = (/ 4)
 
-createPlayer2 :: SDL.Renderer -> Float -> Float -> IO Player
-createPlayer2 r width base =
+createPlayer2 :: ReaderIO WindowContext Player
+createPlayer2 = do
+  let xp w = w * 3 / 4
   set (playerObject . objItem . itemSprite . spriteTransform)
-      (Just $ SpriteTransform 0 (True, False)) .
-  set xPos (width * 3 / 4)
-  <$> createPlayer r base SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp
+      (Just $ SpriteTransform 0 (True, False))
+    <$> createPlayer SDL.ScancodeLeft SDL.ScancodeRight SDL.ScancodeUp xp
 
 setRandomAV :: Ball -> Ball
 setRandomAV b =
@@ -154,10 +166,11 @@ resetBall width height b =
       set yVel 0
       $ setRandomAV b
 
-createBall :: SDL.Renderer -> Float -> Float -> IO Ball
-createBall r width height = do
-  item <- graphicsSpriteItem r =<< getDataFileName "ball.png"
-  rgen <- newStdGen
+createBall :: ReaderIO WindowContext Ball
+createBall = do
+  (WindowContext width height _ r) <- ask
+  item <- liftIO $ graphicsSpriteItem r =<< getDataFileName "ball.png"
+  rgen <- liftIO newStdGen
   let ball = Ball rgen 0 object
   return $ resetBall width height $
            set (ballObject . objGravity) (sceneGravity / 2) .
@@ -167,17 +180,18 @@ createBall r width height = do
            set (ballObject . objItem) item
            $ setRandomAV ball
 
-createSun :: SDL.Renderer -> Float -> IO GraphicsItem
-createSun r w = do
-  item <- graphicsSpriteItem r =<< getDataFileName "sun.png"
-  return $ set xPos (3 * w / 4) .
-           set yPos 0 .
-           set (itemSprite . anchor) AnchorTopMid
-           $ item
+createSun :: ReaderIO WindowContext GraphicsItem
+createSun = do
+  (WindowContext w _ _ r) <- ask
+  set xPos (3 * w / 4) .
+    set yPos 0 .
+    set (itemSprite . anchor) AnchorTopMid
+    <$> liftIO (graphicsSpriteItem r =<< getDataFileName "sun.png")
 
-createBackground :: SDL.Renderer -> Float -> Float -> IO GraphicsItem
-createBackground r w h = do
-  (tex, twi, thi) <- loadTexture r =<< getDataFileName "background.png"
+createBackground :: ReaderIO WindowContext GraphicsItem
+createBackground = do
+  (WindowContext w h _ r) <- ask
+  (tex, twi, thi) <- liftIO $ loadTexture r =<< getDataFileName "background.png"
   let xp = w / 2
       yp = h
       tw = fromIntegral twi :: Float
@@ -186,12 +200,13 @@ createBackground r w h = do
       sprite = Sprite tex AnchorBottomMid sw sh Nothing
   return $ GraphicsItem xp yp (Just $ RenderSprite sprite)
 
-createCloud :: SDL.Renderer -> Float -> Float -> FilePath -> IO Object
-createCloud r w h path = do
-  item <- graphicsSpriteItem r path
-  xp <- randomRIO (- w / 2, w)
-  yp <- randomRIO (0, h / 4)
-  v <- randomRIO (2, 40)
+createCloud :: FilePath -> ReaderIO WindowContext Object
+createCloud path = do
+  (WindowContext w h _ r) <- ask
+  item <- liftIO $ graphicsSpriteItem r path
+  xp <- liftIO $ randomRIO (- w / 2, w)
+  yp <- liftIO $ randomRIO (0, h / 4)
+  v <- liftIO $ randomRIO (2, 40)
   return $ set (objItem . itemSprite . anchor) AnchorTopLeft .
            set xPos xp .
            set yPos yp .
@@ -199,28 +214,29 @@ createCloud r w h path = do
            set objItem item
            $ object
 
-createClouds :: SDL.Renderer -> Float -> Float -> IO [Object]
-createClouds r w h = do
-  paths <- mapM getDataFileName ["cloud" ++ show n ++ ".png" | n <- [1..5]]
-  mapM (createCloud r w h) paths
+createClouds :: ReaderIO WindowContext [Object]
+createClouds = do
+  paths <- liftIO $ mapM getDataFileName ["cloud" ++ show n ++ ".png" | n <- [1..5]]
+  mapM createCloud paths
 
-createBounds :: Float -> Float -> (Object, Object, Object)
-createBounds width base = (ground, leftWall, rightWall)
-  where
-    ground = set yPos base .
-             set objCollisionShape (const . Just $ CollisionLine ((0, base), (0, -1)))
-             $ object
-    leftWall = set objCollisionShape (const . Just $ CollisionLine ((0, 0), (1, 0))) object
-    rightWall = set xPos width .
-                set objCollisionShape (const . Just $ CollisionLine ((width, 0), (-1, 0)))
-                $ object
+createBounds :: ReaderIO WindowContext (Object, Object, Object)
+createBounds = do
+  (WindowContext width _ base _) <- ask
+  let ground = set yPos base .
+               set objCollisionShape (const . Just $ CollisionLine ((0, base), (0, -1)))
+               $ object
+      leftWall = set objCollisionShape (const . Just $ CollisionLine ((0, 0), (1, 0))) object
+      rightWall = set xPos width .
+                  set objCollisionShape (const . Just $ CollisionLine ((width, 0), (-1, 0)))
+                  $ object
+  return (ground, leftWall, rightWall)
 
-
-createPole :: SDL.Renderer -> Float -> Float -> Float -> IO (Object, Object, Object)
-createPole renderer width height base = do
+createPole :: ReaderIO WindowContext (Object, Object, Object)
+createPole = do
+  (WindowContext width height base renderer) <- ask
   let getPoleSprite = return . RenderSprite . set anchor AnchorBottomMid <=< sprite renderer <=< getDataFileName
-  poleSprite <- Just <$> getPoleSprite "pole.png"
-  poleBackSprite <- Just <$> getPoleSprite "pole_back.png"
+  poleSprite <- liftIO $ Just <$> getPoleSprite "pole.png"
+  poleBackSprite <- liftIO $ Just <$> getPoleSprite "pole_back.png"
   let poleDistance = height / 7
       (netX, netY, netHeight) = (width / 2, base, -265)
       backPole = set yPos (netY - poleDistance / 2) .
@@ -238,9 +254,10 @@ createPole renderer width height base = do
                  $ object
   return (backPole, net, frontPole)
 
-createMenu :: SDL.Renderer -> TTF.FFI.TTFFont -> Float -> Float -> IO [GraphicsItem]
-createMenu renderer font width height = do
-  newBall <- graphicsTextItem renderer font (SDL.V4 0 0 0 255) "N: Neuer Ball"
+createMenu :: TTF.FFI.TTFFont -> ReaderIO WindowContext [GraphicsItem]
+createMenu font = do
+  (WindowContext width height _ renderer) <- ask
+  newBall <- liftIO $ graphicsTextItem renderer font (SDL.V4 0 0 0 255) "N: Neuer Ball"
   return [set (itemSprite . anchor) AnchorTopRight . set xPos (width - 10) . set yPos 10 $ newBall]
 
 startScene :: SDL.Window -> SDL.Renderer -> IO GameScene
@@ -252,14 +269,16 @@ startScene window renderer =
         width = fromIntegral wi
         height = fromIntegral hi
         base = height - height / 7
-        (ground, leftWall, rightWall) = createBounds width base
-    (backPole, net, frontPole) <- createPole renderer width height base
-    p1 <- createPlayer1 renderer width base
-    p2 <- createPlayer2 renderer width base
-    sun <- createSun renderer width
-    bg <- createBackground renderer width height
-    clouds <- createClouds renderer width height
-    ball <- createBall renderer width height
-    menu <- createMenu renderer menuFont width height
-    return $ GameScene width height base ground leftWall rightWall backPole net frontPole
-                       sun clouds bg ball p1 p2 menu
+        windowContext = WindowContext width height base renderer
+    flip runReaderT windowContext $ do
+      (ground, leftWall, rightWall) <- createBounds
+      (backPole, net, frontPole) <- createPole
+      p1 <- createPlayer1
+      p2 <- createPlayer2
+      sun <- createSun
+      bg <- createBackground
+      clouds <- createClouds
+      ball <- createBall
+      menu <- createMenu menuFont
+      return $ GameScene width height base ground leftWall rightWall backPole net frontPole
+                         sun clouds bg ball p1 p2 menu

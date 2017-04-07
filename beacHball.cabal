@@ -52,6 +52,7 @@ executable beacHball
                      , containers
                      , JuicyPixels
                      , lens
+                     , mtl
                      , netwire
                      , random
                      , sdl2
