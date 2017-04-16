@@ -103,7 +103,7 @@ data GameScene = GameScene {
 makeLenses ''GameScene
 
 instance Scene GameScene where
-  forItems_ s f =
+  traverseItems_ f s =
     f (view sun s) *>
     forOf_ (clouds . traverse . objItem) s f *>
     f (view background s) *>

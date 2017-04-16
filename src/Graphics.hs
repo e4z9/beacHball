@@ -70,7 +70,8 @@ instance Located GraphicsItem where
   yPos = itemY
 
 class Scene s where
-  forItems_ :: Applicative m => s -> (GraphicsItem -> m a) -> m ()
+  -- traverseItems_ is also Traversal s () GraphicsItem b
+  traverseItems_ :: Applicative f => (GraphicsItem -> f b) -> s -> f ()
   clearColor :: s -> SDL.V4 Word8
 
 graphicsItem :: GraphicsItem
@@ -171,7 +172,7 @@ render :: (MonadIO m, Scene s) => SDL.Renderer -> s -> m ()
 render r scene = do
   SDL.rendererDrawColor r SDL.$= clearColor scene
   SDL.clear r
-  forItems_ scene $ renderItem r
+  traverseItems_ (renderItem r) scene
   SDL.present r
 
 renderLoop :: (HasTime t s, Monoid e, MonadIO m, Scene sc) => SDL.Renderer -> sc -> Session m s -> Wire s e m (sc, [SDL.Event]) sc -> m ()
