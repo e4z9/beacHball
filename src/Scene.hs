@@ -198,7 +198,12 @@ createBackground = do
       th = fromIntegral thi :: Float
       (sw, sh) = (round w, round (th * w / tw))
       sprite = Sprite tex AnchorBottomMid sw sh Nothing
-  return $ GraphicsItem xp yp (Just $ RenderSprite sprite)
+  return GraphicsItem {
+    _itemX = xp,
+    _itemY = yp,
+    _itemRenderItem = Just (RenderSprite sprite),
+    _itemVisible = True
+  }
 
 createCloud :: FilePath -> ReaderIO WindowContext Object
 createCloud path = do

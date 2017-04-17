@@ -4,8 +4,9 @@ module Graphics where
 
 import qualified Codec.Picture as I
 import Control.Lens
+import Control.Monad
 import Control.Monad.IO.Class
-import Control.Wire
+import qualified Control.Wire as W
 import qualified Data.ByteString as B
 import qualified Data.Vector.Storable as V
 import Data.Word
@@ -15,7 +16,7 @@ import qualified SDL.Raw
 import SDL.TTF as TTF
 import SDL.TTF.FFI as TTF.FFI
 
-import Prelude hiding ((.))
+import Prelude
 
 data Anchor =
   AnchorTopLeft |
@@ -59,7 +60,8 @@ makePrisms ''RenderItem
 data GraphicsItem = GraphicsItem {
   _itemX :: Position,
   _itemY :: Position,
-  _itemRenderItem :: Maybe RenderItem
+  _itemRenderItem :: Maybe RenderItem,
+  _itemVisible :: Bool
 }
 makeLenses ''GraphicsItem
 itemSprite :: Traversal' GraphicsItem Sprite
@@ -75,7 +77,12 @@ class Scene s where
   clearColor :: s -> SDL.V4 Word8
 
 graphicsItem :: GraphicsItem
-graphicsItem = GraphicsItem 0 0 Nothing
+graphicsItem = GraphicsItem {
+  _itemX = 0,
+  _itemY = 0,
+  _itemRenderItem = Nothing,
+  _itemVisible = True
+}
 
 graphicsSpriteItem :: MonadIO m => SDL.Renderer -> FilePath -> m GraphicsItem
 graphicsSpriteItem renderer texturePath = do
@@ -161,12 +168,13 @@ renderLine r x y (LineInfo (dx, dy) color) = do
   SDL.drawLine r (SDL.P (SDL.V2 xi1 yi1)) (SDL.P (SDL.V2 xi2 yi2))
 
 renderItem :: MonadIO m => SDL.Renderer -> GraphicsItem -> m ()
-renderItem r item = mapM_ renderActualItem (view itemRenderItem item)
-  where
-    x = view itemX item
-    y = view itemY item
-    renderActualItem (RenderSprite sprite) = renderSprite r x y sprite
-    renderActualItem (RenderLine line)     = renderLine r x y line
+renderItem r item =
+  when (view itemVisible item) $ do
+    let x = view itemX item
+        y = view itemY item
+        renderActualItem (RenderSprite sprite) = renderSprite r x y sprite
+        renderActualItem (RenderLine line)     = renderLine r x y line
+    mapM_ renderActualItem (view itemRenderItem item)
 
 render :: (MonadIO m, Scene s) => SDL.Renderer -> s -> m ()
 render r scene = do
@@ -175,11 +183,12 @@ render r scene = do
   traverseItems_ (renderItem r) scene
   SDL.present r
 
-renderLoop :: (HasTime t s, Monoid e, MonadIO m, Scene sc) => SDL.Renderer -> sc -> Session m s -> Wire s e m (sc, [SDL.Event]) sc -> m ()
+renderLoop :: (W.HasTime t s, Monoid e, MonadIO m, Scene sc) =>
+              SDL.Renderer -> sc -> W.Session m s -> W.Wire s e m (sc, [SDL.Event]) sc -> m ()
 renderLoop renderer scene session wire = do
   events <- SDL.pollEvents
-  (step, session') <- stepSession session
-  (output, wire') <- stepWire wire step $ Right (scene, events)
+  (step, session') <- W.stepSession session
+  (output, wire') <- W.stepWire wire step $ Right (scene, events)
   either (const (pure ())) (\scene' -> do
       render renderer scene'
       renderLoop renderer scene' session' wire')
