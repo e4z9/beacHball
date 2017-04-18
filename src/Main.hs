@@ -52,21 +52,11 @@ wallC = 1
 groundC = 2 / 3
 playerC = 1 / 5
 
-handleCollisions :: GameScene -> GameScene
-handleCollisions = collideLenses setRandomAV wallC ball [leftWall, rightWall, net] .
-                   collideLenses slowAV groundC ball [ground] .
-                   collideLenses id playerC ball [player1, player2] .
-                   collideLenses id 1 player1 [leftWall, rightWall, net] .
-                   collideLenses id 1 player2 [leftWall, rightWall, net] .
-                   collideLenses (set yVel 0) 1 player1 [ground] .
-                   collideLenses (set yVel 0) 1 player2 [ground]
-  where slowAV = over ballAV (* groundC)
-
-updateBall :: HasTime t s => Wire s e m GameScene GameScene
-updateBall = mkPure $ \ds scene ->
+updateBallA :: HasTime t s => Wire s e m GameScene GameScene
+updateBallA = mkPure $ \ds scene ->
   let dt = realToFrac $ dtime ds
       scene' = over (ball . ballAFrame) (moveFrame dt) scene
-  in (Right scene', updateBall)
+  in (Right scene', updateBallA)
 
 handleResetBall :: Keys -> GameScene -> GameScene
 handleResetBall keys s@GameScene{_width=width, _height=height} =
@@ -74,29 +64,50 @@ handleResetBall keys s@GameScene{_width=width, _height=height} =
     then over ball (resetBall width height) s
     else s
 
-handleInput :: Keys -> GameScene -> GameScene
-handleInput keys scene =
+runBall :: (HasTime t s, Monad m) => Wire s () m (Keys, GameScene) GameScene
+runBall =
+  arr (uncurry handleResetBall) >>>
+  arr (const [ball . ballObject]) &&& id >>>
+  moveWithGravity >>>
+  arr (collideLenses setRandomAV wallC ball [leftWall, rightWall, net] .
+       collideLenses slowAV groundC ball [ground] .
+       collideLenses id playerC ball [player1, player2]) >>>
+  updateBallA
+  where slowAV = over ballAV (* groundC)
+
+handlePlayerInput :: Keys -> GameScene -> GameScene
+handlePlayerInput keys scene =
   let playerBase = view baseY scene
       updatePlayerV = updatePlayerXV keys . updatePlayerYV playerBase keys
   in  over player1 updatePlayerV .
       over player2 updatePlayerV
-      $ handleResetBall keys scene
+      $ scene
+
+runPlayers :: (HasTime t s, Monad m) => Wire s () m (Keys, GameScene) GameScene
+runPlayers =
+  arr (uncurry handlePlayerInput) >>>
+  arr (const [player1 . playerObject, player2 . playerObject]) &&& id >>>
+  moveWithGravity >>>
+  arr (collideLenses id 1 player1 [leftWall, rightWall, net] .
+       collideLenses id 1 player2 [leftWall, rightWall, net] .
+       collideLenses (set yVel 0) 1 player1 [ground] .
+       collideLenses (set yVel 0) 1 player2 [ground])
+
+
+runClouds :: (HasTime t s, Monad m) => Wire s () m GameScene GameScene
+runClouds = proc scene -> do
+  scene' <- moveWithGravity -< ([clouds . traverse], scene)
+  let w = view width scene
+      base = view baseY scene
+  returnA -< over clouds (map (over xPos (wrap (-w/2) w))) scene'
 
 logic :: (HasTime t s, Monad m) => GameScene -> Wire s () m (GameScene, [SDL.Event]) GameScene
 logic startScene = proc (scene, events) -> do
   untilQuitOrClose -< events
   keys <- handleKeyEvents -< events
-  let scene1 = handleInput keys scene
-  scene2 <- moveWithGravity -< ([player1 . playerObject,
-                                 player2 . playerObject,
-                                 clouds . traverse,
-                                 ball . ballObject], scene1)
-  let w = view width startScene
-      base = view baseY startScene
-      scene3 = handleCollisions .
-               over clouds (map (over xPos (wrap (-w/2) w)))
-               $ scene2
-  updateBall -< scene3
+  scene1 <- runPlayers -< (keys, scene)
+  scene2 <- runBall -< (keys, scene1)
+  runClouds -< scene2
 
 anyRenderingDriver = -1
 
