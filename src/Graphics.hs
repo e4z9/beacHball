@@ -3,9 +3,11 @@
 module Graphics where
 
 import qualified Codec.Picture as I
+import Control.Arrow
 import Control.Lens
 import Control.Monad
 import Control.Monad.IO.Class
+import Control.Monad.Reader
 import qualified Control.Wire as W
 import qualified Data.ByteString as B
 import qualified Data.Vector.Storable as V
@@ -76,6 +78,21 @@ class Scene s where
   traverseItems_ :: Applicative f => (GraphicsItem -> f b) -> s -> f ()
   clearColor :: s -> SDL.V4 Word8
 
+data RenderEnv = RenderEnv {
+  _originX :: Position,
+  _originY :: Position,
+  renderer :: SDL.Renderer
+}
+makeLenses ''RenderEnv
+
+renderEnv :: SDL.Renderer -> RenderEnv
+renderEnv = RenderEnv 0 0
+
+type RenderContext m a = ReaderT RenderEnv m a
+
+askOrigin :: Monad m => RenderContext m (Position, Position)
+askOrigin = asks $ _originX &&& _originY
+
 graphicsItem :: GraphicsItem
 graphicsItem = GraphicsItem {
   _itemX = 0,
@@ -141,8 +158,10 @@ loadTexture renderer path = do
   SDL.textureBlendMode tex2 SDL.$= SDL.BlendAlphaBlend
   return (tex2, fromIntegral w, fromIntegral h)
 
-renderSprite :: MonadIO m => SDL.Renderer -> Position -> Position -> Sprite -> m ()
-renderSprite r x y sprite =
+renderSprite :: MonadIO m => Sprite -> RenderContext m ()
+renderSprite sprite = do
+  (x, y) <- askOrigin
+  r <- asks renderer
   let (xp, yp) = spriteTopLeft x y sprite
       xi = fromIntegral $ round xp
       yi = fromIntegral $ round yp
@@ -151,15 +170,17 @@ renderSprite r x y sprite =
       hi = fromIntegral $ view h sprite
       targetRect = Just $ SDL.Rectangle (SDL.P (SDL.V2 xi yi)) (SDL.V2 wi hi)
       trans = view spriteTransform sprite
-  in maybe
+  maybe
     (SDL.copy r tex Nothing targetRect)
     (\t -> SDL.copyEx r tex Nothing targetRect
       (realToFrac $ view transformAngle t) Nothing
       (uncurry SDL.V2 $ view transformFlip t))
     trans
 
-renderLine :: MonadIO m => SDL.Renderer -> Position -> Position -> LineInfo -> m ()
-renderLine r x y (LineInfo (dx, dy) color) = do
+renderLine :: MonadIO m => LineInfo -> RenderContext m ()
+renderLine (LineInfo (dx, dy) color) = do
+  (x, y) <- askOrigin
+  r <- asks renderer
   let xi1 = fromIntegral $ round x
       yi1 = fromIntegral $ round y
       xi2 = fromIntegral $ round (x + dx)
@@ -167,20 +188,22 @@ renderLine r x y (LineInfo (dx, dy) color) = do
   SDL.rendererDrawColor r SDL.$= color
   SDL.drawLine r (SDL.P (SDL.V2 xi1 yi1)) (SDL.P (SDL.V2 xi2 yi2))
 
-renderItem :: MonadIO m => SDL.Renderer -> GraphicsItem -> m ()
-renderItem r item =
+renderItem :: MonadIO m => GraphicsItem -> RenderContext m ()
+renderItem item =
   when (view itemVisible item) $ do
-    let x = view itemX item
-        y = view itemY item
-        renderActualItem (RenderSprite sprite) = renderSprite r x y sprite
-        renderActualItem (RenderLine line)     = renderLine r x y line
-    mapM_ renderActualItem (view itemRenderItem item)
+    (ox, oy) <- askOrigin
+    let x = ox + view itemX item
+        y = oy + view itemY item
+        renderActualItem (RenderSprite sprite) = renderSprite sprite
+        renderActualItem (RenderLine line)     = renderLine line
+    local (set originX x . set originY y) $
+      mapM_ renderActualItem (view itemRenderItem item)
 
 render :: (MonadIO m, Scene s) => SDL.Renderer -> s -> m ()
 render r scene = do
   SDL.rendererDrawColor r SDL.$= clearColor scene
   SDL.clear r
-  traverseItems_ (renderItem r) scene
+  traverseItems_ (\i -> runReaderT (renderItem i) (renderEnv r)) scene
   SDL.present r
 
 renderLoop :: (W.HasTime t s, Monoid e, MonadIO m, Scene sc) =>
