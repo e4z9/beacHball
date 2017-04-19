@@ -64,7 +64,7 @@ handleResetBall keys s@GameScene{_width=width, _height=height} =
     then over ball (resetBall width height) s
     else s
 
-runBall :: (HasTime t s, Monad m) => Wire s () m (Keys, GameScene) GameScene
+runBall :: (HasTime t s, Monad m) => Wire s e m (Keys, GameScene) GameScene
 runBall =
   arr (uncurry handleResetBall) >>>
   arr (const [ball . ballObject]) &&& id >>>
@@ -83,7 +83,7 @@ handlePlayerInput keys scene =
       over player2 updatePlayerV
       $ scene
 
-runPlayers :: (HasTime t s, Monad m) => Wire s () m (Keys, GameScene) GameScene
+runPlayers :: (HasTime t s, Monad m) => Wire s e m (Keys, GameScene) GameScene
 runPlayers =
   arr (uncurry handlePlayerInput) >>>
   arr (const [player1 . playerObject, player2 . playerObject]) &&& id >>>
@@ -94,7 +94,7 @@ runPlayers =
        collideLenses (set yVel 0) 1 player2 [ground])
 
 
-runClouds :: (HasTime t s, Monad m) => Wire s () m GameScene GameScene
+runClouds :: (HasTime t s, Monad m) => Wire s e m GameScene GameScene
 runClouds = proc scene -> do
   scene' <- moveWithGravity -< ([clouds . traverse], scene)
   let w = view width scene
