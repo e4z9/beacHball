@@ -82,6 +82,12 @@ ballRandomR range b =
   let (a, g) = randomR range (view ballRandomGen b)
   in  (a, set ballRandomGen g b)
 
+data CountDown = CountDown {
+  _countDownNumbers :: [GraphicsItem],
+  _countDownItem :: Maybe GraphicsItem
+}
+makeLenses ''CountDown
+
 data GameScene = GameScene {
   _width :: Float,
   _height :: Float,
@@ -98,7 +104,8 @@ data GameScene = GameScene {
   _ball :: Ball,
   _player1 :: Player,
   _player2 :: Player,
-  _menuItems :: [GraphicsItem]
+  _menuItems :: [GraphicsItem],
+  _countDown :: CountDown
 }
 makeLenses ''GameScene
 
@@ -114,6 +121,7 @@ instance Scene GameScene where
     f (view (player2 . playerObject . objItem) s) *>
     f (view (frontPole . objItem) s) *>
     forOf_ (menuItems . traverse) s f *>
+    forOf_ (countDown . countDownItem . _Just) s f *>
     pure ()
   clearColor _ = SDL.V4 155 220 255 255
 
@@ -259,16 +267,34 @@ createPole = do
                  $ object
   return (backPole, net, frontPole)
 
+black = SDL.V4 0 0 0 255
+
 createMenu :: TTF.FFI.TTFFont -> ReaderIO WindowContext [GraphicsItem]
 createMenu font = do
   (WindowContext width height _ renderer) <- ask
-  newBall <- liftIO $ graphicsTextItem renderer font (SDL.V4 0 0 0 255) "N: Neuer Ball"
+  newBall <- liftIO $ graphicsTextItem renderer font black "N: Neuer Ball"
   return [set (itemSprite . anchor) AnchorTopRight . set xPos (width - 10) . set yPos 10 $ newBall]
+
+createCountDown :: TTF.FFI.TTFFont -> ReaderIO WindowContext CountDown
+createCountDown font = do
+  (WindowContext width height _ renderer) <- ask
+  let createNumber i = set xPos (width / 2) .
+                       set yPos (height / 4) .
+                       set (itemSprite . anchor) AnchorCenter
+                       <$> graphicsTextItem renderer font black (show i)
+  one <- liftIO $ createNumber 1
+  two <- liftIO $ createNumber 2
+  three <- liftIO $ createNumber 3
+  return $ CountDown [one, two, three] Nothing
+
+fontFilePath = getDataFileName "jellee-typeface/Jellee-Roman.ttf"
+fontForSize s = flip TTF.openFont s =<< fontFilePath
 
 startScene :: SDL.Window -> SDL.Renderer -> IO GameScene
 startScene window renderer =
   TTF.withInit $ do
-    menuFont <- flip TTF.openFont 18 =<< getDataFileName "jellee-typeface/Jellee-Roman.ttf"
+    menuFont <- fontForSize 18
+    countDownFont <- fontForSize 36
     windowConfig <- SDL.getWindowConfig window
     let (SDL.V2 wi hi) = SDL.windowInitialSize windowConfig
         width = fromIntegral wi
@@ -285,5 +311,6 @@ startScene window renderer =
       clouds <- createClouds
       ball <- createBall
       menu <- createMenu menuFont
+      countDown <- createCountDown countDownFont
       return $ GameScene width height base ground leftWall rightWall backPole net frontPole
-                         sun clouds bg ball p1 p2 menu
+                         sun clouds bg ball p1 p2 menu countDown

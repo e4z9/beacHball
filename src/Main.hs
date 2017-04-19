@@ -58,15 +58,32 @@ updateBallA = mkPure $ \ds scene ->
       scene' = over (ball . ballAFrame) (moveFrame dt) scene
   in (Right scene', updateBallA)
 
-handleResetBall :: Keys -> GameScene -> GameScene
-handleResetBall keys s@GameScene{_width=width, _height=height} =
-  if isScancodePressed SDL.ScancodeN keys
-    then over ball (resetBall width height) s
-    else s
+resetBallPressed :: Keys -> Bool
+resetBallPressed = isScancodePressed SDL.ScancodeN
 
-runBall :: (HasTime t s, Monad m) => Wire s e m (Keys, GameScene) GameScene
-runBall =
-  arr (uncurry handleResetBall) >>>
+resetBallInScene :: GameScene -> GameScene
+resetBallInScene s@GameScene{_width=w, _height=h} =
+  over ball (resetBall w h) s
+
+onceW :: Monoid e => Wire s e m a a
+onceW = mkPureN $ \a -> (Right a, mkEmpty)
+
+setCountDown :: Maybe Int -> CountDown -> CountDown
+setCountDown (Just i) cd = set countDownItem (Just $ view countDownNumbers cd !! (i-1)) cd
+setCountDown Nothing cd  = set countDownItem Nothing cd
+
+runCountDown :: (HasTime t s, Monoid e, Monad m) => Wire s e m GameScene GameScene
+runCountDown =
+  let setCount i = over countDown (setCountDown i) ^>> onceW
+  in  (resetBallInScene ^>> onceW) -->
+      setCount (Just 3) --> id >>> for 1 -->
+      setCount (Just 2) --> id >>> for 1 -->
+      setCount (Just 1) --> id >>> for 1 -->
+      setCount Nothing
+
+playBall :: (HasTime t s, Monoid e, Monad m) => Wire s e m (Keys, GameScene) GameScene
+playBall =
+  (first (unless resetBallPressed) >>^ snd) >>>
   arr (const [ball . ballObject]) &&& id >>>
   moveWithGravity >>>
   arr (collideLenses setRandomAV wallC ball [leftWall, rightWall, net] .
@@ -74,6 +91,9 @@ runBall =
        collideLenses id playerC ball [player1, player2]) >>>
   updateBallA
   where slowAV = over ballAV (* groundC)
+
+runBall :: (HasTime t s, Monoid e, Monad m) => Wire s e m (Keys, GameScene) GameScene
+runBall = (snd ^>> runCountDown) --> playBall --> runBall
 
 handlePlayerInput :: Keys -> GameScene -> GameScene
 handlePlayerInput keys scene =
