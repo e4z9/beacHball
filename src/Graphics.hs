@@ -10,13 +10,13 @@ import Control.Monad.IO.Class
 import Control.Monad.Reader
 import qualified Control.Wire as W
 import qualified Data.ByteString as B
+import qualified Data.Text as Text
 import qualified Data.Vector.Storable as V
 import Data.Word
 import Foreign.C.Types
 import qualified SDL
 import qualified SDL.Raw
-import SDL.TTF as TTF
-import SDL.TTF.FFI as TTF.FFI
+import qualified SDL.Font as TTF
 
 import Prelude
 
@@ -106,7 +106,7 @@ graphicsSpriteItem renderer texturePath = do
   s <- Just . RenderSprite <$> sprite renderer texturePath
   return $ set itemRenderItem s graphicsItem
 
-graphicsTextItem :: MonadIO m => SDL.Renderer -> TTF.FFI.TTFFont ->
+graphicsTextItem :: MonadIO m => SDL.Renderer -> TTF.Font ->
                                  SDL.V4 Word8 -> String -> m GraphicsItem
 graphicsTextItem renderer font color text = do
   s <- Just . RenderSprite <$> textSprite renderer font color text
@@ -117,9 +117,9 @@ sprite renderer texturePath = do
   (texture, w, h) <- loadTexture renderer texturePath
   return $ Sprite texture AnchorCenter w h Nothing
 
-textSprite :: MonadIO m => SDL.Renderer -> TTF.FFI.TTFFont -> SDL.V4 Word8 -> String -> m Sprite
-textSprite renderer font (SDL.V4 r g b a) text = do
-  surface <- TTF.renderUTF8Blended font text (SDL.Raw.Color r g b a)
+textSprite :: MonadIO m => SDL.Renderer -> TTF.Font -> SDL.V4 Word8 -> String -> m Sprite
+textSprite renderer font color text = do
+  surface <- TTF.blended font color (Text.pack text)
   texture <- SDL.createTextureFromSurface renderer surface
   SDL.freeSurface surface
   texInfo <- SDL.queryTexture texture

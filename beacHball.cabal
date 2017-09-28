@@ -57,4 +57,5 @@ executable beacHball
                      , random
                      , sdl2
                      , sdl2-ttf
+                     , text
                      , vector
