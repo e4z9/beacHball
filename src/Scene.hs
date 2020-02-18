@@ -148,7 +148,7 @@ createPlayer left right up xp = do
            $ player
 
 createPlayer1 :: ReaderIO WindowContext Player
-createPlayer1 = createPlayer SDL.ScancodeA SDL.ScancodeD SDL.ScancodeW xp
+createPlayer1 = createPlayer SDL.ScancodeA SDL.ScancodeD SDL.ScancodeS xp
   where xp = (/ 4)
 
 createPlayer2 :: ReaderIO WindowContext Player
