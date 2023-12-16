@@ -16,7 +16,7 @@ import qualified SDL
 import SDL.Font as TTF
 import System.Random
 
-sceneGravity = 2500
+sceneGravity = 2500 :: Float
 
 -- Circle with radius = width and located at top of sprite
 circleForSprite :: Position -> Position -> Sprite -> CollisionShape

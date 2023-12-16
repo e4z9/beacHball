@@ -154,9 +154,9 @@ loadTexture renderer path = do
       h = fromIntegral $ I.imageHeight image
   -- no idea why, but updating texture in ABGR format takes the bytes in RGBA
   tex <- SDL.createTexture renderer SDL.ABGR8888 SDL.TextureAccessStreaming (SDL.V2 w h)
-  tex2 <- SDL.updateTexture tex Nothing (byteStringFromVector (I.imageData image)) (4 * w)
-  SDL.textureBlendMode tex2 SDL.$= SDL.BlendAlphaBlend
-  return (tex2, fromIntegral w, fromIntegral h)
+  SDL.updateTexture tex Nothing (byteStringFromVector (I.imageData image)) (4 * w)
+  SDL.textureBlendMode tex SDL.$= SDL.BlendAlphaBlend
+  return (tex, fromIntegral w, fromIntegral h)
 
 renderSprite :: MonadIO m => Sprite -> RenderContext m ()
 renderSprite sprite = do
