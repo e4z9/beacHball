@@ -6,6 +6,7 @@
 
 # Stack
 .stack-work
+.stack.yaml.lock
 
 # Qt Creator
 *.cabal.user
